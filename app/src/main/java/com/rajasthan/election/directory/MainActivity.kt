@@ -557,7 +557,6 @@ fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Offic
 
 
 @Composable
-@Composable
 fun OfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> Unit) {
     CompactOfficerCard(o, onOpen, onFavorite)
 }
@@ -577,6 +576,7 @@ fun SmallAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVe
     }
 }
 
+@Composable
 fun InitialAvatar(name: String) {
     val initials = name.split(" ").filter(String::isNotBlank).take(2).joinToString("") { it.first().uppercase() }
     Box(Modifier.size(52.dp).clip(CircleShape).background(avatarColor(name)), contentAlignment = Alignment.Center) { Text(initials, color = Color.White, fontWeight = FontWeight.Bold) }
