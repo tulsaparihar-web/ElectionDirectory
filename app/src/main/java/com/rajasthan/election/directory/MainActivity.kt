@@ -458,32 +458,208 @@ fun EmptyState(title: String, message: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Unit) {
-    val state by vm.state.collectAsState(); val districts by vm.districts.collectAsState(); val designations by vm.designations.collectAsState(); val sectionCells by vm.sectionCells.collectAsState()
+    val state by vm.state.collectAsState()
+
     var localDistrict by remember(state.district) { mutableStateOf(state.district) }
     var localDesignation by remember(state.designation) { mutableStateOf(state.designation) }
     var localSection by remember(state.sectionCell) { mutableStateOf(state.sectionCell) }
+
+    // Cascading filters: every next filter is based on the selections above it.
+    val districtValues = remember(all) {
+        listOf("All") + all.flatMap { it.district.split(",").map(String::trim) }
+            .filter { it.isNotBlank() }.distinct().sorted()
+    }
+
+    val designationValues = remember(all, localDistrict) {
+        val source = if (localDistrict == "All") all else all.filter {
+            it.district.split(",").any { d -> d.trim().equals(localDistrict, true) }
+        }
+        listOf("All") + source.map { it.designation.trim() }
+            .filter { it.isNotBlank() }.distinct().sorted()
+    }
+
+    val sectionValues = remember(all, localDistrict, localDesignation) {
+        val source = all.filter { officer ->
+            val districtMatch = localDistrict == "All" ||
+                officer.district.split(",").any { d -> d.trim().equals(localDistrict, true) }
+            val designationMatch = localDesignation == "All" ||
+                officer.designation.equals(localDesignation, true)
+            districtMatch && designationMatch
+        }
+        listOf("All") + source.map { it.sectionCell.trim() }
+            .filter { it.isNotBlank() }.distinct().sorted()
+    }
+
+    // Keep selections valid when a parent filter changes.
+    LaunchedEffect(localDistrict) {
+        if (localDesignation != "All" && localDesignation !in designationValues) {
+            localDesignation = "All"
+        }
+    }
+    LaunchedEffect(localDistrict, localDesignation) {
+        if (localSection != "All" && localSection !in sectionValues) {
+            localSection = "All"
+        }
+    }
+
+    val matchingCount = remember(all, localDistrict, localDesignation, localSection) {
+        all.count { officer ->
+            val districtMatch = localDistrict == "All" ||
+                officer.district.split(",").any { d -> d.trim().equals(localDistrict, true) }
+            val designationMatch = localDesignation == "All" ||
+                officer.designation.equals(localDesignation, true)
+            val sectionMatch = localSection == "All" ||
+                officer.sectionCell.equals(localSection, true)
+            districtMatch && designationMatch && sectionMatch
+        }
+    }
+
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().padding(20.dp).padding(bottom = 24.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) { Text("Filter Staff", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); TextButton({ vm.clearFilterOnly(); onDismiss() }) { Text("Clear all") } }
-            Spacer(Modifier.height(12.dp))
-            FilterSelector("District", localDistrict, districts) { localDistrict = it }
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Filter Staff",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "$matchingCount staff match these filters",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                TextButton({
+                    localDistrict = "All"
+                    localDesignation = "All"
+                    localSection = "All"
+                    vm.clearFilterOnly()
+                }) { Text("Clear all") }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            FilterSelector(
+                label = "District",
+                selected = localDistrict,
+                values = districtValues,
+                onSelect = {
+                    localDistrict = it
+                    localDesignation = "All"
+                    localSection = "All"
+                }
+            )
+
             Spacer(Modifier.height(10.dp))
-            FilterSelector("Designation", localDesignation, designations) { localDesignation = it }
+
+            FilterSelector(
+                label = "Designation",
+                selected = localDesignation,
+                values = designationValues,
+                onSelect = {
+                    localDesignation = it
+                    localSection = "All"
+                }
+            )
+
             Spacer(Modifier.height(10.dp))
-            FilterSelector("Section / Cell", localSection, sectionCells) { localSection = it }
+
+            FilterSelector(
+                label = "Section / Cell",
+                selected = localSection,
+                values = sectionValues,
+                onSelect = { localSection = it }
+            )
+
             Spacer(Modifier.height(18.dp))
-            Button({ vm.setDistrict(localDistrict); vm.setDesignation(localDesignation); vm.setSectionCell(localSection); onDismiss() }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("Apply Filters") }
+
+            Button(
+                {
+                    vm.setDistrict(localDistrict)
+                    vm.setDesignation(localDesignation)
+                    vm.setSectionCell(localSection)
+                    onDismiss()
+                },
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.FilterAlt, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Show $matchingCount Staff")
+            }
         }
     }
 }
 
 @Composable
-fun FilterSelector(label: String, selected: String, values: List<String>, onSelect: (String) -> Unit) {
+fun FilterSelector(
+    label: String,
+    selected: String,
+    values: List<String>,
+    onSelect: (String) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
-    Column { Text(label, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(5.dp)); Box {
-        OutlinedButton({ expanded = true }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) { Text(selected, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis); Icon(Icons.Default.ExpandMore, null) }
-        DropdownMenu(expanded, { expanded = false }) { values.forEach { DropdownMenuItem({ Text(it) }, { onSelect(it); expanded = false }) } }
-    } }
+    val displaySelected = when {
+        selected != "All" -> selected
+        label == "District" -> "All Districts"
+        label == "Designation" -> "All Designations"
+        else -> "All Sections / Cells"
+    }
+
+    Column {
+        Text(label, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(5.dp))
+        Box {
+            OutlinedButton(
+                { expanded = true },
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(13.dp)
+            ) {
+                Text(
+                    displaySelected,
+                    Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Icon(Icons.Default.ExpandMore, null)
+            }
+
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.heightIn(max = 360.dp)
+            ) {
+                values.forEach { value ->
+                    val display = if (value == "All") {
+                        when (label) {
+                            "District" -> "All Districts"
+                            "Designation" -> "All Designations"
+                            else -> "All Sections / Cells"
+                        }
+                    } else value
+
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (value == selected) {
+                                    Icon(Icons.Default.Check, null, Modifier.size(18.dp), tint = Navy)
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Text(display)
+                            }
+                        },
+                        onClick = {
+                            onSelect(value)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
