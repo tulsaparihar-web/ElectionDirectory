@@ -323,18 +323,18 @@ fun OfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> 
             }
             Spacer(Modifier.height(9.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.LocationOn, null, tint = Navy, Modifier.size(18.dp)); Spacer(Modifier.width(5.dp)); Text(o.locationLabel(), color = Color(0xFF4D5668), style = MaterialTheme.typography.bodyMedium)
+                Icon(Icons.Default.LocationOn, null, Modifier.size(18.dp), tint = Navy); Spacer(Modifier.width(5.dp)); Text(o.locationLabel(), color = Color(0xFF4D5668), style = MaterialTheme.typography.bodyMedium)
             }
             if (o.sectionCell.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Work, null, tint = Navy, Modifier.size(17.dp)); Spacer(Modifier.width(5.dp)); Text(o.sectionCell, color = Color(0xFF4D5668), style = MaterialTheme.typography.bodySmall)
+                    Icon(Icons.Default.Work, null, Modifier.size(17.dp), tint = Navy); Spacer(Modifier.width(5.dp)); Text(o.sectionCell, color = Color(0xFF4D5668), style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (o.mobile() != null) {
                 Spacer(Modifier.height(7.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Phone, null, tint = Green, Modifier.size(17.dp)); Spacer(Modifier.width(5.dp)); Text(o.mobile()!!, fontWeight = FontWeight.SemiBold, color = TextDark)
+                    Icon(Icons.Default.Phone, null, Modifier.size(17.dp), tint = Green); Spacer(Modifier.width(5.dp)); Text(o.mobile()!!, fontWeight = FontWeight.SemiBold, color = TextDark)
                     Spacer(Modifier.weight(1f))
                     SmallAction("Call", Icons.Default.Call) { dial(context, o.mobile()!!) }
                     if (o.email.isNotBlank()) { Spacer(Modifier.width(6.dp)); SmallAction("Email", Icons.Default.Email) { email(context, o.email) } }
@@ -388,7 +388,7 @@ fun OfficeCard(district: String, staff: List<Officer>, onOpen: (String) -> Unit,
                 Divider(Modifier.padding(vertical = 8.dp))
                 sub.forEach { (location, people) ->
                     Row(Modifier.fillMaxWidth().clickable { onOpen(district) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.LocationCity, null, tint = Gold, Modifier.size(18.dp)); Spacer(Modifier.width(7.dp)); Text(location, Modifier.weight(1f)); Text("${people.size}", color = Color.Gray)
+                        Icon(Icons.Default.LocationCity, null, Modifier.size(18.dp), tint = Gold); Spacer(Modifier.width(7.dp)); Text(location, Modifier.weight(1f)); Text("${people.size}", color = Color.Gray)
                     }
                 }
             }
@@ -451,7 +451,7 @@ fun FavoritesScreen(list: List<Officer>, onOpen: (Officer) -> Unit, onFavorite: 
 @Composable
 fun EmptyState(title: String, message: String) {
     Box(Modifier.fillMaxWidth().padding(top = 60.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Default.SearchOff, null, tint = Navy, Modifier.size(48.dp)); Spacer(Modifier.height(10.dp)); Text(title, fontWeight = FontWeight.Bold); Text(message, color = Color.Gray) }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Default.SearchOff, null, Modifier.size(48.dp), tint = Navy); Spacer(Modifier.height(10.dp)); Text(title, fontWeight = FontWeight.Bold); Text(message, color = Color.Gray) }
     }
 }
 
@@ -464,7 +464,7 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
     var localSection by remember(state.sectionCell) { mutableStateOf(state.sectionCell) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(20.dp).padding(bottom = 24.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) { Text("Filter Staff", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, Modifier.weight(1f)); TextButton({ vm.clearFilterOnly(); onDismiss() }) { Text("Clear all") } }
+            Row(verticalAlignment = Alignment.CenterVertically) { Text("Filter Staff", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); TextButton({ vm.clearFilterOnly(); onDismiss() }) { Text("Clear all") } }
             Spacer(Modifier.height(12.dp))
             FilterSelector("District", localDistrict, districts) { localDistrict = it }
             Spacer(Modifier.height(10.dp))
@@ -519,7 +519,7 @@ fun SettingsSheet(darkMode: Boolean, onDarkMode: (Boolean) -> Unit, onImport: (L
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(22.dp).padding(bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, Modifier.weight(1f))
+                Text("Settings", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 if (adminAuthenticated) {
                     AssistChip(onClick = { adminAuthenticated = false }, label = { Text("Admin logout") }, leadingIcon = { Icon(Icons.Default.LockOpen, null, Modifier.size(16.dp)) })
                 }
@@ -578,7 +578,7 @@ fun AdminLoginSheet(onDismiss: () -> Unit, onAuthenticated: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(22.dp).padding(bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Settings, null, tint = Navy, Modifier.size(30.dp))
+                Icon(Icons.Default.Settings, null, Modifier.size(30.dp), tint = Navy)
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text("Administrator Login", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -763,7 +763,7 @@ fun RowScope.ActionButton(label: String, icon: androidx.compose.ui.graphics.vect
 }
 
 @Composable
-fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) { Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, tint = Navy, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(text) } }
+fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) { Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, Modifier.size(20.dp), tint = Navy); Spacer(Modifier.width(8.dp)); Text(text) } }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
