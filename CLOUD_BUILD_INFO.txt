@@ -1,0 +1,6 @@
+Election Contact Directory - GitHub Actions Cloud Build Package
+
+Source: FIXED7
+Build: Gradle 8.13 + Java 17 + Android SDK 36
+Workflow: .github/workflows/build-apk.yml
+APK artifact: Election-Contact-Directory-APK

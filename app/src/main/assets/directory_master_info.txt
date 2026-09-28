@@ -1,0 +1,5 @@
+Election Contact Directory - Embedded Offline Master
+Source: Election_Contact_Directory_Master_Merged_App_Ready(1).xlsx
+Primary sheet: Directory
+Records: 499
+Mode: Offline seed data
