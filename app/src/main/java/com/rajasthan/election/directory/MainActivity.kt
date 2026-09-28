@@ -557,6 +557,26 @@ fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Offic
 
 
 @Composable
+@Composable
+fun OfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> Unit) {
+    CompactOfficerCard(o, onOpen, onFavorite)
+}
+
+@Composable
+fun SmallAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    FilledTonalButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        colors = ButtonDefaults.filledTonalButtonColors(containerColor = Navy.copy(.08f), contentColor = Navy),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+        modifier = Modifier.height(36.dp)
+    ) {
+        Icon(icon, null, Modifier.size(16.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+    }
+}
+
 fun InitialAvatar(name: String) {
     val initials = name.split(" ").filter(String::isNotBlank).take(2).joinToString("") { it.first().uppercase() }
     Box(Modifier.size(52.dp).clip(CircleShape).background(avatarColor(name)), contentAlignment = Alignment.Center) { Text(initials, color = Color.White, fontWeight = FontWeight.Bold) }
