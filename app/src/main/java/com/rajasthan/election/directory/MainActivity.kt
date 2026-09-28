@@ -101,7 +101,8 @@ enum class AppTab(val label: String) { STAFF("Staff"), OFFICES("Offices"), BIRTH
 
 data class DirectoryUiState(
     val query: String = "",
-    val district: String = "All",
+    // Staff tab opens directly on Jaipur contacts; users can still choose "All" from the District filter.
+    val district: String = "Jaipur",
     val designation: String = "All",
     val sectionCell: String = "All",
     val tab: AppTab = AppTab.STAFF,
@@ -148,7 +149,7 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
     fun setSectionCell(v: String) { _state.update { it.copy(sectionCell = v) } }
     fun setTab(v: AppTab) { _state.update { it.copy(tab = v) } }
     fun clearFilters() { _state.update { it.copy(query = "", district = "All", designation = "All", sectionCell = "All") } }
-    fun clearFilterOnly() { _state.update { it.copy(district = "All", designation = "All", sectionCell = "All") } }
+    fun clearFilterOnly() { _state.update { it.copy(district = "Jaipur", designation = "All", sectionCell = "All") } }
     fun setDarkMode(v: Boolean) { _state.update { it.copy(darkMode = v) } }
     fun replaceData(items: List<Officer>) = viewModelScope.launch { repo.replace(items) }
     fun toggleFavorite(o: Officer) = viewModelScope.launch { repo.setFavorite(o.id, !o.isFavorite) }
