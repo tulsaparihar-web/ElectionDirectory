@@ -373,70 +373,68 @@ fun HomeQuickCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: 
 
 @Composable
 fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>, state: DirectoryUiState, onOpen: (Officer) -> Unit, onFilter: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+        Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Staff Directory", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
-                Text("Search official department contacts", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
+                Text("Staff Directory", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextDark)
+                Text(
+                    if (state.district == "All") "All Rajasthan staff" else "\${state.district} staff",
+                    color = TextMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
             Surface(color = Navy.copy(.08f), shape = RoundedCornerShape(10.dp)) {
-                Row(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.OfflineBolt, null, tint = Navy, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(5.dp))
+                Row(Modifier.padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.OfflineBolt, null, tint = Navy, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text("OFFLINE", color = Navy, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
-        DashboardStats(all = all, showing = list.size, favorites = all.count { it.isFavorite })
-        Spacer(Modifier.height(12.dp))
+
         SearchField(state.query, vm::setQuery)
-        Spacer(Modifier.height(10.dp))
-        Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-            Column(Modifier.padding(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.FilterAlt, null, tint = Navy, modifier = Modifier.size(19.dp))
-                    Spacer(Modifier.width(7.dp))
-                    Text("Refine results", fontWeight = FontWeight.Bold, color = TextDark)
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { vm.clearFilterOnly() }, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("Reset") }
-                }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    FilterButton("District", state.district, Modifier.weight(1f)) { onFilter() }
-                    Spacer(Modifier.width(6.dp))
-                    FilterButton("Designation", state.designation, Modifier.weight(1f)) { onFilter() }
-                    Spacer(Modifier.width(6.dp))
-                    FilterButton("Section / Cell", state.sectionCell, Modifier.weight(1f)) { onFilter() }
-                }
-            }
+
+        Spacer(Modifier.height(7.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterButton("District", state.district, Modifier.weight(1f)) { onFilter() }
+            FilterButton("Designation", state.designation, Modifier.weight(1f)) { onFilter() }
+            FilterButton("Section / Cell", state.sectionCell, Modifier.weight(1f)) { onFilter() }
         }
-        val active = listOfNotNull(
-            state.district.takeIf { it != "All" }?.let { "District: $it" },
-            state.designation.takeIf { it != "All" }?.let { "Designation: $it" },
-            state.sectionCell.takeIf { it != "All" }?.let { "Section: $it" }
-        )
-        if (active.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth().padding(top = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                active.forEach { label ->
-                    AssistChip(onClick = {}, label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(15.dp)) },
-                        modifier = Modifier.padding(end = 5.dp))
-                }
-                TextButton(onClick = { vm.clearFilterOnly() }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Clear") }
+
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("\${list.size} staff", color = TextDark, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+            if (state.query.isNotBlank()) {
+                Text("  •  Search results", color = TextMuted, style = MaterialTheme.typography.labelSmall)
             }
-        }
-        Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(list.size.toString() + " staff records", color = TextDark, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.weight(1f))
-            Text("Tap a record for details", color = TextMuted, style = MaterialTheme.typography.labelSmall)
+            if (state.district != "All" || state.designation != "All" || state.sectionCell != "All" || state.query.isNotBlank()) {
+                TextButton(
+                    onClick = { vm.clearFilterOnly() },
+                    contentPadding = PaddingValues(horizontal = 5.dp, vertical = 0.dp),
+                    modifier = Modifier.height(32.dp)
+                ) { Text("Reset", style = MaterialTheme.typography.labelSmall) }
+            }
         }
-        if (list.isEmpty()) EmptyState("No staff records found", "Try a different search term or clear one of the filters.")
-        else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-            items(list, key = { it.id }) { OfficerCard(it, onOpen, vm::toggleFavorite) }
+
+        if (list.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                EmptyState("No staff records found", "Try another search or change the filters.")
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+                contentPadding = PaddingValues(top = 2.dp, bottom = 12.dp)
+            ) {
+                items(list, key = { it.id }) {
+                    CompactOfficerCard(it, onOpen, vm::toggleFavorite)
+                }
+            }
         }
     }
 }
+
 
 @Composable
 fun DashboardStats(all: List<Officer>, showing: Int, favorites: Int) {
@@ -510,57 +508,53 @@ fun FilterButton(label: String, value: String, modifier: Modifier = Modifier, on
 }
 
 @Composable
-fun OfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> Unit) {
+fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> Unit) {
     val context = LocalContext.current
-    Card(Modifier.fillMaxWidth().clickable { onOpen(o) }, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp)) {
-        Column(Modifier.padding(14.dp)) {
+    Card(
+        Modifier.fillMaxWidth().clickable { onOpen(o) },
+        shape = RoundedCornerShape(15.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 InitialAvatar(o.officerName)
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(o.officerName, fontWeight = FontWeight.Bold, color = TextDark, style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(4.dp))
-                    Surface(color = Gold.copy(.15f), shape = RoundedCornerShape(7.dp)) { Text(o.designation, color = Color(0xFF7B4700), modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                    Text(o.officerName, fontWeight = FontWeight.Bold, color = TextDark, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(2.dp))
+                    Text(o.designation.ifBlank { "Designation not available" }, color = Navy, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                IconButton({ onFavorite(o) }) { Icon(if (o.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, "Favorite", tint = if (o.isFavorite) Gold else Color(0xFF6E7686)) }
+                IconButton(onClick = { onFavorite(o) }, modifier = Modifier.size(38.dp)) {
+                    Icon(if (o.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, "Favorite", tint = if (o.isFavorite) Gold else Color(0xFF7A8494), modifier = Modifier.size(21.dp))
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = TextMuted, modifier = Modifier.size(20.dp))
             }
-            Spacer(Modifier.height(9.dp))
+
+            Spacer(Modifier.height(7.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.LocationOn, null, Modifier.size(18.dp), tint = Navy); Spacer(Modifier.width(5.dp)); Text(o.locationLabel(), color = Color(0xFF4D5668), style = MaterialTheme.typography.bodyMedium)
-            }
-            if (o.sectionCell.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Work, null, Modifier.size(17.dp), tint = Navy); Spacer(Modifier.width(5.dp)); Text(o.sectionCell, color = Color(0xFF4D5668), style = MaterialTheme.typography.bodySmall)
+                Icon(Icons.Default.LocationOn, null, Modifier.size(16.dp), tint = Navy)
+                Spacer(Modifier.width(5.dp))
+                Text(o.locationLabel().ifBlank { "Location not available" }, color = TextMuted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                o.mobile()?.let { SmallAction("Call", Icons.Default.Call) { dial(context, it) } }
+                if (o.email.isNotBlank()) {
+                    Spacer(Modifier.width(5.dp))
+                    SmallAction("Email", Icons.Default.Email) { email(context, o.email) }
                 }
             }
-            if (o.mobile() != null) {
-                Spacer(Modifier.height(7.dp))
+
+            if (o.sectionCell.isNotBlank()) {
+                Spacer(Modifier.height(5.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Phone, null, Modifier.size(17.dp), tint = Green); Spacer(Modifier.width(5.dp)); Text(o.mobile()!!, fontWeight = FontWeight.SemiBold, color = TextDark)
-                    Spacer(Modifier.weight(1f))
-                    SmallAction("Call", Icons.Default.Call) { dial(context, o.mobile()!!) }
-                    if (o.email.isNotBlank()) { Spacer(Modifier.width(6.dp)); SmallAction("Email", Icons.Default.Email) { email(context, o.email) } }
+                    Icon(Icons.Default.Work, null, Modifier.size(15.dp), tint = TextMuted)
+                    Spacer(Modifier.width(5.dp))
+                    Text(o.sectionCell, color = TextMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
     }
 }
 
-@Composable
-fun SmallAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    FilledTonalButton(
-        onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
-        colors = ButtonDefaults.filledTonalButtonColors(containerColor = Navy.copy(.08f), contentColor = Navy),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-        modifier = Modifier.height(36.dp)
-    ) {
-        Icon(icon, null, Modifier.size(16.dp))
-        Spacer(Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-    }
-}
 
 @Composable
 fun InitialAvatar(name: String) {
