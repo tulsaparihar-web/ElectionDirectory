@@ -154,12 +154,15 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
     fun toggleFavorite(o: Officer) = viewModelScope.launch { repo.setFavorite(o.id, !o.isFavorite) }
 }
 
-private val Navy = Color(0xFF132A7A)
-private val NavyDark = Color(0xFF0B1B55)
-private val Gold = Color(0xFFFF9800)
-private val Green = Color(0xFF188A57)
-private val Background = Color(0xFFF5F7FA)
-private val TextDark = Color(0xFF172033)
+private val Navy = Color(0xFF173B7A)
+private val NavyDark = Color(0xFF0B2857)
+private val Gold = Color(0xFFF4A000)
+private val Green = Color(0xFF198754)
+private val Background = Color(0xFFF4F6F9)
+private val SurfaceWhite = Color(0xFFFFFFFF)
+private val Border = Color(0xFFD9E0EA)
+private val TextDark = Color(0xFF182235)
+private val TextMuted = Color(0xFF667085)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -217,18 +220,27 @@ fun ElectionDirectoryApp() {
 
 @Composable
 fun Header(onAbout: () -> Unit, onSettings: () -> Unit) {
-    Surface(color = Navy, shadowElevation = 3.dp) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(.12f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.AccountBalance, null, tint = Gold, modifier = Modifier.size(28.dp))
+    Surface(color = Navy, shadowElevation = 4.dp) {
+        Column {
+            Box(Modifier.fillMaxWidth().height(4.dp).background(Gold))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(52.dp).clip(CircleShape).background(Color.White.copy(.12f)).clickable { onAbout() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.AccountBalance, "Rajasthan Government", tint = Gold, modifier = Modifier.size(29.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("RAJASTHAN GOVERNMENT", color = Gold, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                    Text("Election Department Directory", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                    Text("राजस्थान सरकार • निर्वाचन विभाग", color = Color.White.copy(.78f), style = MaterialTheme.typography.labelMedium)
+                }
+                IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "Settings", tint = Color.White) }
+                IconButton(onClick = onAbout) { Icon(Icons.Default.Info, "About", tint = Color.White) }
             }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Election Department Directory", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-                Text("Election Department • Rajasthan Government", color = Color.White.copy(.78f), style = MaterialTheme.typography.labelMedium)
+            Row(Modifier.fillMaxWidth().height(3.dp)) {
+                Box(Modifier.weight(1f).fillMaxHeight().background(Gold))
+                Box(Modifier.weight(1f).fillMaxHeight().background(Color.White.copy(.9f)))
+                Box(Modifier.weight(1f).fillMaxHeight().background(Green))
             }
-            IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "Settings", tint = Color.White) }
-            IconButton(onClick = onAbout) { Icon(Icons.Default.Info, "About", tint = Color.White) }
         }
     }
 }
@@ -237,17 +249,41 @@ fun Header(onAbout: () -> Unit, onSettings: () -> Unit) {
 fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>, state: DirectoryUiState, onOpen: (Officer) -> Unit, onFilter: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Column(Modifier.weight(1f)) {
+                Text("Staff Directory", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
+                Text("Search official department contacts", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
+            }
+            Surface(color = Navy.copy(.08f), shape = RoundedCornerShape(10.dp)) {
+                Row(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.OfflineBolt, null, tint = Navy, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("OFFLINE", color = Navy, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
         DashboardStats(all = all, showing = list.size, favorites = all.count { it.isFavorite })
         Spacer(Modifier.height(12.dp))
         SearchField(state.query, vm::setQuery)
-        Spacer(Modifier.height(9.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            FilterButton("District", state.district, Modifier.weight(1f)) { onFilter() }
-            Spacer(Modifier.width(6.dp))
-            FilterButton("Designation", state.designation, Modifier.weight(1f)) { onFilter() }
-            Spacer(Modifier.width(6.dp))
-            FilterButton("Section / Cell", state.sectionCell, Modifier.weight(1f)) { onFilter() }
-            IconButton(onClick = onFilter) { Icon(Icons.Default.Tune, "More filters", tint = Navy) }
+        Spacer(Modifier.height(10.dp))
+        Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
+            Column(Modifier.padding(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.FilterAlt, null, tint = Navy, modifier = Modifier.size(19.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text("Refine results", fontWeight = FontWeight.Bold, color = TextDark)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { vm.clearFilterOnly() }, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("Reset") }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    FilterButton("District", state.district, Modifier.weight(1f)) { onFilter() }
+                    Spacer(Modifier.width(6.dp))
+                    FilterButton("Designation", state.designation, Modifier.weight(1f)) { onFilter() }
+                    Spacer(Modifier.width(6.dp))
+                    FilterButton("Section / Cell", state.sectionCell, Modifier.weight(1f)) { onFilter() }
+                }
+            }
         }
         val active = listOfNotNull(
             state.district.takeIf { it != "All" }?.let { "District: $it" },
@@ -255,16 +291,22 @@ fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>,
             state.sectionCell.takeIf { it != "All" }?.let { "Section: $it" }
         )
         if (active.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(top = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                 active.forEach { label ->
-                    AssistChip(onClick = {}, label = { Text(label) }, trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(16.dp)) }, modifier = Modifier.padding(end = 6.dp))
+                    AssistChip(onClick = {}, label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(15.dp)) },
+                        modifier = Modifier.padding(end = 5.dp))
                 }
-                TextButton(onClick = { vm.clearFilterOnly() }) { Text("Clear") }
+                TextButton(onClick = { vm.clearFilterOnly() }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Clear") }
             }
         }
-        Text("${list.size} contacts", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(vertical = 5.dp))
-        if (list.isEmpty()) EmptyState("No contacts found", "Try changing the search or filters.")
-        else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(list.size.toString() + " staff records", color = TextDark, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.weight(1f))
+            Text("Tap a record for details", color = TextMuted, style = MaterialTheme.typography.labelSmall)
+        }
+        if (list.isEmpty()) EmptyState("No staff records found", "Try a different search term or clear one of the filters.")
+        else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
             items(list, key = { it.id }) { OfficerCard(it, onOpen, vm::toggleFavorite) }
         }
     }
@@ -272,13 +314,19 @@ fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>,
 
 @Composable
 fun DashboardStats(all: List<Officer>, showing: Int, favorites: Int) {
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = NavyDark)) {
-        Row(Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            StatItem(Icons.Default.Person, all.size.toString(), "Staff")
-            StatItem(Icons.Default.LocationOn, all.flatMap { it.district.split(",") }.map(String::trim).filter(String::isNotBlank).distinct().size.toString(), "Districts")
-            StatItem(Icons.Default.Star, favorites.toString(), "Favorites")
-            StatItem(Icons.Default.Cake, all.count { isBirthdayToday(it.dob) }.toString(), "Today")
-            StatItem(Icons.Default.FilterAlt, showing.toString(), "Showing")
+    val statItems = listOf(
+        Triple(Icons.Default.Person, all.size.toString(), "STAFF"),
+        Triple(Icons.Default.LocationOn, all.flatMap { it.district.split(",") }.map(String::trim).filter(String::isNotBlank).distinct().size.toString(), "DISTRICTS"),
+        Triple(Icons.Default.Star, favorites.toString(), "FAVORITES"),
+        Triple(Icons.Default.Cake, all.count { isBirthdayToday(it.dob) }.toString(), "TODAY"),
+        Triple(Icons.Default.FilterAlt, showing.toString(), "SHOWING")
+    )
+    Surface(Modifier.fillMaxWidth(), color = NavyDark, shape = RoundedCornerShape(18.dp), shadowElevation = 2.dp) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 7.dp, vertical = 13.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            statItems.forEachIndexed { index, item ->
+                if (index > 0) VerticalDivider(Modifier.height(42.dp), color = Color.White.copy(.13f))
+                StatItem(item.first, item.second, item.third)
+            }
         }
     }
 }
@@ -294,15 +342,44 @@ fun StatItem(icon: androidx.compose.ui.graphics.vector.ImageVector, value: Strin
 
 @Composable
 fun SearchField(value: String, onChange: (String) -> Unit) {
-    OutlinedTextField(value, onChange, Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
-        placeholder = { Text("Search name, mobile, office, email...") }, leadingIcon = { Icon(Icons.Default.Search, null) },
-        trailingIcon = { if (value.isNotEmpty()) IconButton({ onChange("") }) { Icon(Icons.Default.Clear, "Clear") } })
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        shape = RoundedCornerShape(16.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = Navy,
+            unfocusedBorderColor = Border,
+            focusedLeadingIconColor = Navy,
+            unfocusedLeadingIconColor = TextMuted,
+            cursorColor = Navy
+        ),
+        placeholder = { Text("Search name, mobile, office, email or ID...", color = TextMuted) },
+        leadingIcon = { Icon(Icons.Default.Search, null) },
+        trailingIcon = { if (value.isNotEmpty()) IconButton({ onChange("") }) { Icon(Icons.Default.Clear, "Clear") } }
+    )
 }
 
 @Composable
 fun FilterButton(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    OutlinedButton(onClick, modifier = modifier, shape = RoundedCornerShape(13.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 9.dp)) {
-        Icon(Icons.Default.FilterList, null, Modifier.size(17.dp)); Spacer(Modifier.width(5.dp)); Text(if (value == "All") label else value, maxLines = 1, overflow = TextOverflow.Ellipsis); Icon(Icons.Default.ExpandMore, null, Modifier.size(18.dp))
+    val active = value != "All"
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(46.dp),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (active) Navy else Border),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (active) Navy.copy(.06f) else SurfaceWhite,
+            contentColor = if (active) Navy else TextDark
+        ),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)
+    ) {
+        Icon(if (label == "District") Icons.Default.LocationOn else if (label == "Designation") Icons.Default.Badge else Icons.Default.Work, null, Modifier.size(17.dp))
+        Spacer(Modifier.width(5.dp))
+        Text(if (value == "All") label else value, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+        Spacer(Modifier.width(2.dp))
+        Icon(Icons.Default.ExpandMore, null, Modifier.size(18.dp))
     }
 }
 
@@ -346,7 +423,17 @@ fun OfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> 
 
 @Composable
 fun SmallAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    FilledTonalButton(onClick, shape = RoundedCornerShape(11.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp), modifier = Modifier.height(38.dp)) { Icon(icon, null, Modifier.size(17.dp)); Spacer(Modifier.width(4.dp)); Text(label, style = MaterialTheme.typography.labelMedium) }
+    FilledTonalButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        colors = ButtonDefaults.filledTonalButtonColors(containerColor = Navy.copy(.08f), contentColor = Navy),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp),
+        modifier = Modifier.height(36.dp)
+    ) {
+        Icon(icon, null, Modifier.size(16.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium)
+    }
 }
 
 @Composable
