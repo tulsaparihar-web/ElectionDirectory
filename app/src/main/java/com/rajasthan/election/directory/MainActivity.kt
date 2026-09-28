@@ -97,64 +97,38 @@ class OfficerRepository(private val dao: OfficerDao) {
     suspend fun replace(items: List<Officer>) { dao.deleteAll(); dao.insertAll(items) }
 }
 
-enum class AppTab(val label: String) { HOME("Home"), STAFF("Staff"), OFFICES("Offices"), BIRTHDAYS("Birthdays"), FAVORITES("Favorites") }
-
+enum class AppTab(val label:String){HOME("Home"),DIRECTORY("Directory"),SEARCH("Search"),FAVORITES("Favorites"),MORE("More")}
 data class DirectoryUiState(
-    val query: String = "",
-    // Staff tab opens directly on Jaipur contacts; users can still choose "All" from the District filter.
-    val district: String = "Jaipur",
-    val designation: String = "All",
-    val sectionCell: String = "All",
-    val tab: AppTab = AppTab.STAFF,
-    val darkMode: Boolean = false
-)
-
-class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
-    val officers = repo.officers.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    private val _state = MutableStateFlow(DirectoryUiState())
-    val state = _state.asStateFlow()
-
-    val districts: StateFlow<List<String>> = officers.map { list ->
-        listOf("All") + list.flatMap { it.district.split(",").map(String::trim) }
-            .filter { it.isNotBlank() }.distinct().sorted()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("All"))
-
-    val designations: StateFlow<List<String>> = officers.map { list ->
-        listOf("All") + list.map { it.designation }.filter { it.isNotBlank() }.distinct().sorted()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("All"))
-
-    val sectionCells: StateFlow<List<String>> = officers.map { list ->
-        listOf("All") + list.map { it.sectionCell }.filter { it.isNotBlank() }.distinct().sorted()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("All"))
-
-    val filtered: StateFlow<List<Officer>> = combine(officers, state) { all, s ->
-        all.filter { o ->
-            val q = s.query.trim().lowercase(Locale.getDefault())
-            val searchable = listOf(o.officerName, o.designation, o.officeDepartment, o.district,
-                o.subLocation, o.sectionCell, o.employeeId, o.dob, o.email, o.contactNumbers, o.remark)
-            val matchesQuery = q.isBlank() || searchable.any { it.lowercase(Locale.getDefault()).contains(q) }
-            val matchesDistrict = s.district == "All" || o.district.split(",").any { it.trim().equals(s.district, true) }
-            val matchesDesignation = s.designation == "All" || o.designation.equals(s.designation, true)
-            val matchesSection = s.sectionCell == "All" || o.sectionCell.equals(s.sectionCell, true)
-            matchesQuery && matchesDistrict && matchesDesignation && matchesSection
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val favorites: StateFlow<List<Officer>> = officers.map { it.filter(Officer::isFavorite) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    fun setQuery(v: String) { _state.update { it.copy(query = v) } }
-    fun setDistrict(v: String) { _state.update { it.copy(district = v) } }
-    fun setDesignation(v: String) { _state.update { it.copy(designation = v) } }
-    fun setSectionCell(v: String) { _state.update { it.copy(sectionCell = v) } }
-    fun setTab(v: AppTab) { _state.update { it.copy(tab = v) } }
-    fun clearFilters() { _state.update { it.copy(query = "", district = "All", designation = "All", sectionCell = "All") } }
-    fun clearFilterOnly() { _state.update { it.copy(district = "Jaipur", designation = "All", sectionCell = "All") } }
-    fun setDarkMode(v: Boolean) { _state.update { it.copy(darkMode = v) } }
-    fun replaceData(items: List<Officer>) = viewModelScope.launch { repo.replace(items) }
-    fun toggleFavorite(o: Officer) = viewModelScope.launch { repo.setFavorite(o.id, !o.isFavorite) }
+ val query:String="",val district:String="Jaipur",val designation:String="All",val department:String="All",val office:String="All",val sectionCell:String="All",val tab:AppTab=AppTab.HOME,val darkMode:Boolean=false)
+class DirectoryViewModel(private val repo:OfficerRepository):ViewModel(){
+ val officers=repo.officers.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ private val _state=MutableStateFlow(DirectoryUiState());val state=_state.asStateFlow()
+ private val _recent=MutableStateFlow<List<Int>>(emptyList());val recentlyViewed=_recent.asStateFlow()
+ val districts=officers.map{listOf("All")+it.flatMap{v->v.district.split(",").map(String::trim)}.filter(String::isNotBlank).distinct().sorted()}.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),listOf("All"))
+ val designations=officers.map{listOf("All")+it.map{v->v.designation.trim()}.filter(String::isNotBlank).distinct().sorted()}.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),listOf("All"))
+ val departments=officers.map{listOf("All")+it.map{v->v.officeDepartment.trim()}.filter(String::isNotBlank).distinct().sorted()}.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),listOf("All"))
+ val offices=officers.map{listOf("All")+it.map{v->v.subLocation.trim()}.filter(String::isNotBlank).distinct().sorted()}.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),listOf("All"))
+ val sectionCells=officers.map{listOf("All")+it.map{v->v.sectionCell.trim()}.filter(String::isNotBlank).distinct().sorted()}.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),listOf("All"))
+ val filtered=combine(officers,state){all,st->val q=st.query.trim().lowercase(Locale.getDefault());all.filter{o->
+  val fields=listOf(o.officerName,o.designation,o.officeDepartment,o.district,o.subLocation,o.sectionCell,o.employeeId,o.dob,o.email,o.contactNumbers,o.remark)
+  (q.isBlank()||fields.any{it.lowercase(Locale.getDefault()).contains(q)}) &&
+  (st.district=="All"||o.district.split(",").any{it.trim().equals(st.district,true)}) &&
+  (st.designation=="All"||o.designation.equals(st.designation,true)) &&
+  (st.department=="All"||o.officeDepartment.equals(st.department,true)) &&
+  (st.office=="All"||o.subLocation.equals(st.office,true)) &&
+  (st.sectionCell=="All"||o.sectionCell.equals(st.sectionCell,true))
+ }}.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ val favorites=officers.map{it.filter(Officer::isFavorite)}.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ fun setQuery(v:String)=_state.update{it.copy(query=v)};fun setDistrict(v:String)=_state.update{it.copy(district=v)}
+ fun setDesignation(v:String)=_state.update{it.copy(designation=v)};fun setDepartment(v:String)=_state.update{it.copy(department=v)}
+ fun setOffice(v:String)=_state.update{it.copy(office=v)};fun setSectionCell(v:String)=_state.update{it.copy(sectionCell=v)}
+ fun setTab(v:AppTab)=_state.update{it.copy(tab=v)}
+ fun clearFilters()=_state.update{it.copy(query="",district="All",designation="All",department="All",office="All",sectionCell="All")}
+ fun clearFilterOnly()=_state.update{it.copy(query="",district="Jaipur",designation="All",department="All",office="All",sectionCell="All")}
+ fun setDarkMode(v:Boolean)=_state.update{it.copy(darkMode=v)};fun replaceData(items:List<Officer>)=viewModelScope.launch{repo.replace(items)}
+ fun toggleFavorite(o:Officer)=viewModelScope.launch{repo.setFavorite(o.id,!o.isFavorite)}
+ fun recordViewed(o:Officer){_recent.update{(listOf(o.id)+it.filter{v->v!=o.id}).take(8)}}
 }
-
 private val Navy = Color(0xFF173B7A)
 private val NavyDark = Color(0xFF0B2857)
 private val Gold = Color(0xFFF4A000)
@@ -173,271 +147,76 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun ElectionDirectoryApp() {
-    val vm = rememberDirectoryViewModel()
-    val state by vm.state.collectAsState()
-    val all by vm.officers.collectAsState()
-    val filtered by vm.filtered.collectAsState()
-    val favorites by vm.favorites.collectAsState()
-    var selected by remember { mutableStateOf<Officer?>(null) }
-    var showFilters by remember { mutableStateOf(false) }
-    var showAbout by remember { mutableStateOf(false) }
-    var showSettings by remember { mutableStateOf(false) }
-
-    val scheme = if (state.darkMode) darkColorScheme(primary = Color(0xFF9FAFFF), secondary = Color(0xFFFFB74D), background = Color(0xFF101318)) else lightColorScheme(primary = Navy, secondary = Gold, background = Background)
-    MaterialTheme(colorScheme = scheme) {
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            bottomBar = {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    NavigationBarItem(state.tab == AppTab.HOME, { vm.setTab(AppTab.HOME) },
-                        icon = { Icon(Icons.Default.Home, null) }, label = { Text("Home") })
-                    NavigationBarItem(state.tab == AppTab.STAFF, { vm.setTab(AppTab.STAFF) },
-                        icon = { Icon(Icons.Default.Person, null) }, label = { Text("Staff") })
-                    NavigationBarItem(state.tab == AppTab.OFFICES, { vm.setTab(AppTab.OFFICES) },
-                        icon = { Icon(Icons.Default.Business, null) }, label = { Text("Offices") })
-                    NavigationBarItem(state.tab == AppTab.BIRTHDAYS, { vm.setTab(AppTab.BIRTHDAYS) },
-                        icon = { Icon(Icons.Default.Cake, null) }, label = { Text("Birthdays") })
-                    NavigationBarItem(state.tab == AppTab.FAVORITES, { vm.setTab(AppTab.FAVORITES) },
-                        icon = { Icon(Icons.Default.Star, null) }, label = { Text("Favorites") })
-                }
-            }
-        ) { padding ->
-            Column(Modifier.fillMaxSize().padding(padding)) {
-                Header(onAbout = { showAbout = true }, onSettings = { showSettings = true })
-                when (state.tab) {
-                    AppTab.HOME -> HomeScreen(vm, all, onOpenStaff = { vm.setTab(AppTab.STAFF) }, onOpenOfficer = { selected = it })
-                    AppTab.STAFF -> StaffScreen(vm, all, filtered, state, onOpen = { selected = it }, onFilter = { showFilters = true })
-                    AppTab.OFFICES -> OfficesScreen(all, onOpen = { vm.setTab(AppTab.STAFF); vm.setDistrict(it) }, onContact = { selected = it })
-                    AppTab.BIRTHDAYS -> BirthdaysScreen(all, onOpen = { selected = it }, onFavorite = vm::toggleFavorite)
-                    AppTab.FAVORITES -> FavoritesScreen(favorites, onOpen = { selected = it }, onFavorite = vm::toggleFavorite)
-                }
-            }
-        }
-    }
-
-    selected?.let { OfficerDetails(it, onDismiss = { selected = null }, onFavorite = { vm.toggleFavorite(it) }) }
-    if (showFilters) FilterSheet(vm, all, onDismiss = { showFilters = false })
-    if (showAbout) AboutSheet(all.size, onDismiss = { showAbout = false })
-    if (showSettings) SettingsSheet(state.darkMode, onDarkMode = vm::setDarkMode, onImport = { items -> vm.replaceData(items) }, onDismiss = { showSettings = false })
+fun ElectionDirectoryApp(){
+ val vm=rememberDirectoryViewModel();val state by vm.state.collectAsState();val all by vm.officers.collectAsState();val filtered by vm.filtered.collectAsState();val favorites by vm.favorites.collectAsState();val recent by vm.recentlyViewed.collectAsState()
+ var selected by remember{mutableStateOf<Officer?>(null)};var showFilters by remember{mutableStateOf(false)};var showAbout by remember{mutableStateOf(false)};var showSettings by remember{mutableStateOf(false)}
+ val scheme=if(state.darkMode)darkColorScheme(primary=Color(0xFF9FB5FF),secondary=Color(0xFFFFC15A),background=Color(0xFF0D1320))else lightColorScheme(primary=Navy,secondary=Gold,background=Background,surface=SurfaceWhite)
+ MaterialTheme(colorScheme=scheme){Scaffold(containerColor=MaterialTheme.colorScheme.background,bottomBar={
+  NavigationBar(containerColor=SurfaceWhite,tonalElevation=4.dp){
+   NavigationBarItem(state.tab==AppTab.HOME,{vm.setTab(AppTab.HOME)},{Icon(Icons.Default.Home,"Home")},{Text("Home")})
+   NavigationBarItem(state.tab==AppTab.DIRECTORY,{vm.setTab(AppTab.DIRECTORY)},{Icon(Icons.Default.People,"Directory")},{Text("Directory")})
+   NavigationBarItem(state.tab==AppTab.SEARCH,{vm.setTab(AppTab.SEARCH)},{Icon(Icons.Default.Search,"Search")},{Text("Search")})
+   NavigationBarItem(state.tab==AppTab.FAVORITES,{vm.setTab(AppTab.FAVORITES)},{Icon(Icons.Default.Star,"Favorites")},{Text("Favorites")})
+   NavigationBarItem(state.tab==AppTab.MORE,{vm.setTab(AppTab.MORE)},{Icon(Icons.Default.MoreHoriz,"More")},{Text("More")})
+  }
+ }){padding->Column(Modifier.fillMaxSize().padding(padding)){
+  Header(onAbout={showAbout=true},onSettings={showSettings=true})
+  when(state.tab){
+   AppTab.HOME->HomeScreen(vm,all,recent,{vm.setQuery(it);vm.setTab(AppTab.SEARCH)},{vm.setTab(AppTab.DIRECTORY)},{vm.recordViewed(it);selected=it},{showFilters=true})
+   AppTab.DIRECTORY->DirectoryScreen(vm,filtered,state,{vm.recordViewed(it);selected=it},{showFilters=true})
+   AppTab.SEARCH->SearchScreen(vm,filtered,state,{vm.recordViewed(it);selected=it},{showFilters=true})
+   AppTab.FAVORITES->FavoritesScreen(favorites,{vm.recordViewed(it);selected=it},vm::toggleFavorite)
+   AppTab.MORE->MoreScreen(all,{vm.setTab(AppTab.DIRECTORY);vm.clearFilterOnly()},{vm.setTab(AppTab.MORE)},{showSettings=true},{showAbout=true})
+  }
+ }}
+ }
+ selected?.let{OfficerDetails(it,{selected=null}){vm.toggleFavorite(it)}};if(showFilters)FilterSheet(vm,all){showFilters=false};if(showAbout)AboutSheet(all.size){showAbout=false};if(showSettings)SettingsSheet(state.darkMode,vm::setDarkMode,{vm.replaceData(it)}){showSettings=false}
 }
-
-@Composable
-fun Header(onAbout: () -> Unit, onSettings: () -> Unit) {
-    Surface(color = Navy, shadowElevation = 4.dp) {
-        Column {
-            Box(Modifier.fillMaxWidth().height(4.dp).background(Gold))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(52.dp).clip(CircleShape).background(Color.White.copy(.12f)).clickable { onAbout() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.AccountBalance, "Rajasthan Government", tint = Gold, modifier = Modifier.size(29.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("RAJASTHAN GOVERNMENT", color = Gold, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                    Text("Election Department Directory", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-                    Text("राजस्थान सरकार • निर्वाचन विभाग", color = Color.White.copy(.78f), style = MaterialTheme.typography.labelMedium)
-                }
-                IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "Settings", tint = Color.White) }
-                IconButton(onClick = onAbout) { Icon(Icons.Default.Info, "About", tint = Color.White) }
-            }
-            Row(Modifier.fillMaxWidth().height(3.dp)) {
-                Box(Modifier.weight(1f).fillMaxHeight().background(Gold))
-                Box(Modifier.weight(1f).fillMaxHeight().background(Color.White.copy(.9f)))
-                Box(Modifier.weight(1f).fillMaxHeight().background(Green))
-            }
-        }
-    }
+@Composable fun HomeScreen(vm:DirectoryViewModel,all:List<Officer>,recentIds:List<Int>,onSearch:(String)->Unit,onDirectory:()->Unit,onOpen:(Officer)->Unit,onFilters:()->Unit){
+ var q by remember{mutableStateOf("")};val recent=recentIds.mapNotNull{id->all.firstOrNull{it.id==id}}.take(4);val today=all.filter{isBirthdayToday(it.dob)}
+ val des=all.map{it.designation}.filter(String::isNotBlank).distinct().size;val sec=all.map{it.sectionCell}.filter(String::isNotBlank).distinct().size
+ LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
+  item{Surface(Modifier.fillMaxWidth(),color=Navy,shape=RoundedCornerShape(24.dp)){Column(Modifier.padding(18.dp)){
+   Text("Welcome",color=Color.White.copy(.72f),style=MaterialTheme.typography.labelLarge);Text("Find the right contact, quickly.",color=Color.White,fontWeight=FontWeight.Bold,style=MaterialTheme.typography.headlineSmall)
+   Spacer(Modifier.height(5.dp));Text("Search staff, offices and official contact details from one place.",color=Color.White.copy(.82f));Spacer(Modifier.height(14.dp))
+   OutlinedTextField(q,{q=it;if(it.isNotBlank())vm.setQuery(it)},Modifier.fillMaxWidth().heightIn(min=56.dp),singleLine=true,shape=RoundedCornerShape(16.dp),placeholder={Text("Search name, district, phone, email…")},leadingIcon={Icon(Icons.Default.Search,null)},trailingIcon={if(q.isNotBlank())IconButton({q="";vm.setQuery("")}){Icon(Icons.Default.Clear,"Clear")}},colors=OutlinedTextFieldDefaults.colors(focusedContainerColor=SurfaceWhite,unfocusedContainerColor=SurfaceWhite,focusedBorderColor=Color.Transparent,unfocusedBorderColor=Color.Transparent))
+   Spacer(Modifier.height(6.dp));Text("Offline directory • "+all.size+" records",color=Color.White.copy(.72f),style=MaterialTheme.typography.labelSmall);if(q.isNotBlank())TextButton({onSearch(q)},Modifier.fillMaxWidth().height(44.dp),colors=ButtonDefaults.textButtonColors(contentColor=Color.White)){Text("View search results")}
+  }}}
+  item{Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){HomeStatCard(Icons.Default.People,all.size.toString(),"TOTAL STAFF",Navy,Modifier.weight(1f));HomeStatCard(Icons.Default.LocationOn,"41","DISTRICTS",Green,Modifier.weight(1f))}}
+  item{Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){HomeStatCard(Icons.Default.Badge,des.toString(),"DESIGNATIONS",Gold,Modifier.weight(1f));HomeStatCard(Icons.Default.Work,sec.toString(),"SECTIONS / CELLS",Color(0xFF6F42C1),Modifier.weight(1f))}}
+  item{Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){QuickActionCard(Icons.Default.People,"Directory","Browse staff",Modifier.weight(1f),onDirectory);QuickActionCard(Icons.Default.FilterAlt,"Filters","Narrow results",Modifier.weight(1f),onFilters)}}
+  item{SectionTitle("Quick access","Common tasks")}
+  item{Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){QuickActionCard(Icons.Default.Cake,"Birthdays","Today & upcoming",Modifier.weight(1f)){vm.setTab(AppTab.MORE)};QuickActionCard(Icons.Default.Star,"Favorites","Saved contacts",Modifier.weight(1f)){vm.setTab(AppTab.FAVORITES)}}}
+  if(today.isNotEmpty()){item{SectionTitle("Today's birthdays",today.size.toString()+" contacts")};items(today.take(3),key={it.id}){CompactPreviewCard(it,onOpen)}}
+  if(recent.isNotEmpty()){item{SectionTitle("Recently viewed","Your last opened contacts")};items(recent,key={it.id}){CompactPreviewCard(it,onOpen)}}
+ }
 }
-
-@Composable
-fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenStaff: () -> Unit, onOpenOfficer: (Officer) -> Unit) {
-    val today = all.filter { isBirthdayToday(it.dob) }
-    val next = all.firstOrNull { it.dob.isNotBlank() }
-
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Spacer(Modifier.height(14.dp))
-        Text("Election Department Directory", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
-        Text("Rajasthan Government • Election Department", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(12.dp))
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeStatCard(Icons.Default.Person, all.size.toString(), "Total Staff", Navy, Modifier.weight(1f))
-            HomeStatCard(Icons.Default.LocationOn, "41", "Districts", Green, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeStatCard(Icons.Default.Badge, all.map { it.designation }.filter(String::isNotBlank).distinct().size.toString(), "Designations", Gold, Modifier.weight(1f))
-            HomeStatCard(Icons.Default.Work, all.map { it.sectionCell }.filter(String::isNotBlank).distinct().size.toString(), "Sections / Cells", Color(0xFF6F42C1), Modifier.weight(1f))
-        }
-
-        Spacer(Modifier.height(14.dp))
-        SearchField("", { q ->
-            if (q.isNotBlank()) {
-                vm.setQuery(q)
-                vm.setTab(AppTab.STAFF)
-            }
-        })
-        Spacer(Modifier.height(14.dp))
-        Text("Quick Filters", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextDark)
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HomeQuickCard(Icons.Default.LocationOn, "District", "Select District", Modifier.weight(1f)) {
-                vm.setTab(AppTab.STAFF)
-            }
-            HomeQuickCard(Icons.Default.Badge, "Designation", "Select Designation", Modifier.weight(1f)) {
-                vm.setTab(AppTab.STAFF)
-            }
-            HomeQuickCard(Icons.Default.Work, "Section / Cell", "Select Section", Modifier.weight(1f)) {
-                vm.setTab(AppTab.STAFF)
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = { onOpenStaff() },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Navy)
-        ) {
-            Icon(Icons.Default.Person, null)
-            Spacer(Modifier.width(7.dp))
-            Text("View Jaipur Staff", fontWeight = FontWeight.Bold)
-        }
-
-        Spacer(Modifier.height(14.dp))
-        if (today.isNotEmpty()) {
-            Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-                Column(Modifier.padding(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Cake, null, tint = Gold)
-                        Spacer(Modifier.width(7.dp))
-                        Text("Today's Birthdays", fontWeight = FontWeight.Bold, color = TextDark)
-                        Spacer(Modifier.weight(1f))
-                        Text(today.size.toString(), color = Navy, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    today.take(3).forEach { person ->
-                        Row(Modifier.fillMaxWidth().clickable { onOpenOfficer(person) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                            InitialAvatar(person.officerName)
-                            Spacer(Modifier.width(9.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(person.officerName, fontWeight = FontWeight.Bold, color = TextDark)
-                                Text(person.designation, color = TextMuted, style = MaterialTheme.typography.bodySmall)
-                            }
-                            Icon(Icons.Default.ChevronRight, null, tint = TextMuted)
-                        }
-                    }
-                }
-            }
-        } else {
-            Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Cake, null, tint = Gold)
-                    Spacer(Modifier.width(9.dp))
-                    Column {
-                        Text("Birthdays", fontWeight = FontWeight.Bold, color = TextDark)
-                        Text("No birthday today", color = TextMuted, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        }
-    }
+@Composable fun DirectoryScreen(vm:DirectoryViewModel,list:List<Officer>,state:DirectoryUiState,onOpen:(Officer)->Unit,onFilter:()->Unit){
+ Column(Modifier.fillMaxSize().padding(horizontal=12.dp)){Row(Modifier.fillMaxWidth().padding(top=12.dp,bottom=8.dp),verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Staff Directory",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=TextDark);Text(if(state.district=="All")"All Rajasthan staff" else state.district+" staff",color=TextMuted,style=MaterialTheme.typography.bodySmall)};Surface(color=Green.copy(.10f),shape=RoundedCornerShape(10.dp)){Text("OFFLINE",color=Green,fontWeight=FontWeight.Bold,style=MaterialTheme.typography.labelSmall,modifier=Modifier.padding(horizontal=9.dp,vertical=6.dp))}}
+ SearchField(state.query,vm::setQuery);Spacer(Modifier.height(8.dp));Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(7.dp)){FilterButton("District",state.district,Modifier.widthIn(min=120.dp)){onFilter()};FilterButton("Designation",state.designation,Modifier.widthIn(min=140.dp)){onFilter()};FilterButton("Department",state.department,Modifier.widthIn(min=140.dp)){onFilter()};FilterButton("Office",state.office,Modifier.widthIn(min=120.dp)){onFilter()}}
+ Row(Modifier.fillMaxWidth().height(42.dp),verticalAlignment=Alignment.CenterVertically){Text(list.size.toString()+" contacts",color=TextDark,fontWeight=FontWeight.Bold);Spacer(Modifier.weight(1f));if(state.query.isNotBlank()||state.district!="Jaipur"||state.designation!="All"||state.department!="All"||state.office!="All"||state.sectionCell!="All")TextButton(vm::clearFilterOnly,modifier=Modifier.height(40.dp)){Text("Reset")}}
+ if(list.isEmpty())Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){EmptyState("No contacts found","Try another search or filter.")}else LazyColumn(Modifier.weight(1f).fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(9.dp),contentPadding=PaddingValues(top=2.dp,bottom=16.dp)){items(list,key={it.id}){ModernOfficerCard(it,onOpen,vm::toggleFavorite)}}
+ }
 }
-
-@Composable
-fun HomeStatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String, tint: Color, modifier: Modifier = Modifier) {
-    Surface(modifier, color = SurfaceWhite, shape = RoundedCornerShape(14.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).clip(RoundedCornerShape(11.dp)).background(tint.copy(.10f)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = tint)
-            }
-            Spacer(Modifier.width(9.dp))
-            Column {
-                Text(value, color = TextDark, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-                Text(label, color = TextMuted, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    }
+@Composable fun SearchScreen(vm:DirectoryViewModel,list:List<Officer>,state:DirectoryUiState,onOpen:(Officer)->Unit,onFilter:()->Unit){
+ Column(Modifier.fillMaxSize().padding(horizontal=12.dp)){Text("Search contacts",Modifier.padding(top=14.dp),style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold,color=TextDark);Text("Name, district, designation, department, office, phone or email.",color=TextMuted);Spacer(Modifier.height(12.dp));SearchField(state.query,vm::setQuery)
+ Spacer(Modifier.height(9.dp));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){Button(onFilter,Modifier.weight(1f).height(48.dp),shape=RoundedCornerShape(13.dp)){Icon(Icons.Default.FilterAlt,null);Spacer(Modifier.width(6.dp));Text("Filters")};OutlinedButton(vm::clearFilters,Modifier.weight(1f).height(48.dp),shape=RoundedCornerShape(13.dp)){Text("Clear search")}}
+ Spacer(Modifier.height(8.dp));Text(list.size.toString()+" matching contacts",color=TextMuted,style=MaterialTheme.typography.labelLarge);Spacer(Modifier.height(6.dp));if(list.isEmpty())Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){EmptyState("Nothing matched","Try a name, mobile number, district or email address.")}else LazyColumn(Modifier.weight(1f).fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(9.dp),contentPadding=PaddingValues(top=2.dp,bottom=16.dp)){items(list,key={it.id}){ModernOfficerCard(it,onOpen,vm::toggleFavorite)}}
+ }
 }
-
-@Composable
-fun HomeQuickCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(modifier.clickable(onClick = onClick), color = SurfaceWhite, shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-        Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, tint = Navy, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.height(5.dp))
-            Text(title, color = TextDark, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
-            Text(subtitle, color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
-        }
-    }
+@Composable fun MoreScreen(all:List<Officer>,onOffices:()->Unit,onBirthdays:()->Unit,onSettings:()->Unit,onAbout:()->Unit){
+ LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){item{Text("More",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold,color=TextDark);Text("Tools and information",color=TextMuted)};item{MoreOption(Icons.Default.Business,"Offices","Browse staff by district and location",onOffices)};item{MoreOption(Icons.Default.Cake,"Birthdays","Today and upcoming birthdays",onBirthdays)};item{MoreOption(Icons.Default.Settings,"Settings","Appearance and administrator data tools",onSettings)};item{MoreOption(Icons.Default.Info,"About this app",all.size.toString()+" offline directory records",onAbout)}}
 }
-
-@Composable
-fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>, state: DirectoryUiState, onOpen: (Officer) -> Unit, onFilter: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
-        Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Staff Directory", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextDark)
-                Text(
-                    if (state.district == "All") "All Rajasthan staff" else "\${state.district} staff",
-                    color = TextMuted,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            Surface(color = Navy.copy(.08f), shape = RoundedCornerShape(10.dp)) {
-                Row(Modifier.padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.OfflineBolt, null, tint = Navy, modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("OFFLINE", color = Navy, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                }
-            }
-        }
-
-        SearchField(state.query, vm::setQuery)
-
-        Spacer(Modifier.height(7.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilterButton("District", state.district, Modifier.weight(1f)) { onFilter() }
-            FilterButton("Designation", state.designation, Modifier.weight(1f)) { onFilter() }
-            FilterButton("Section / Cell", state.sectionCell, Modifier.weight(1f)) { onFilter() }
-        }
-
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("\${list.size} staff", color = TextDark, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
-            if (state.query.isNotBlank()) {
-                Text("  •  Search results", color = TextMuted, style = MaterialTheme.typography.labelSmall)
-            }
-            Spacer(Modifier.weight(1f))
-            if (state.district != "All" || state.designation != "All" || state.sectionCell != "All" || state.query.isNotBlank()) {
-                TextButton(
-                    onClick = { vm.clearFilterOnly() },
-                    contentPadding = PaddingValues(horizontal = 5.dp, vertical = 0.dp),
-                    modifier = Modifier.height(32.dp)
-                ) { Text("Reset", style = MaterialTheme.typography.labelSmall) }
-            }
-        }
-
-        if (list.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                EmptyState("No staff records found", "Try another search or change the filters.")
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(7.dp),
-                contentPadding = PaddingValues(top = 2.dp, bottom = 12.dp)
-            ) {
-                items(list, key = { it.id }) {
-                    CompactOfficerCard(it, onOpen, vm::toggleFavorite)
-                }
-            }
-        }
-    }
+@Composable fun MoreOption(icon:androidx.compose.ui.graphics.vector.ImageVector,title:String,subtitle:String,onClick:()->Unit){Card(Modifier.fillMaxWidth().clickable(onClick=onClick),shape=RoundedCornerShape(16.dp),colors=CardDefaults.cardColors(containerColor=SurfaceWhite),border=androidx.compose.foundation.BorderStroke(1.dp,Border)){Row(Modifier.padding(14.dp),verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Navy.copy(.08f)),contentAlignment=Alignment.Center){Icon(icon,null,tint=Navy)};Spacer(Modifier.width(12.dp));Column(Modifier.weight(1f)){Text(title,color=TextDark,fontWeight=FontWeight.Bold);Text(subtitle,color=TextMuted,style=MaterialTheme.typography.bodySmall)};Icon(Icons.Default.ChevronRight,null,tint=TextMuted)}}}
+@Composable fun ModernOfficerCard(o:Officer,onOpen:(Officer)->Unit,onFavorite:(Officer)->Unit){
+ val c=LocalContext.current;Card(Modifier.fillMaxWidth().clickable{onOpen(o)},shape=RoundedCornerShape(18.dp),colors=CardDefaults.cardColors(containerColor=SurfaceWhite),border=androidx.compose.foundation.BorderStroke(1.dp,Border),elevation=CardDefaults.cardElevation(defaultElevation=1.dp)){Column(Modifier.padding(13.dp)){
+  Row(verticalAlignment=Alignment.CenterVertically){InitialAvatar(o.officerName);Spacer(Modifier.width(11.dp));Column(Modifier.weight(1f)){Text(o.officerName,fontWeight=FontWeight.Bold,color=TextDark,style=MaterialTheme.typography.titleMedium,maxLines=1,overflow=TextOverflow.Ellipsis);Text(o.designation.ifBlank{"Designation not available"},color=Navy,style=MaterialTheme.typography.bodySmall,maxLines=2,overflow=TextOverflow.Ellipsis)};IconButton({onFavorite(o)},modifier=Modifier.size(48.dp)){Icon(if(o.isFavorite)Icons.Default.Star else Icons.Default.StarBorder,"Favorite",tint=if(o.isFavorite)Gold else TextMuted)}}
+  Spacer(Modifier.height(7.dp));Text("• "+o.locationLabel(),color=TextMuted,style=MaterialTheme.typography.bodySmall,maxLines=1,overflow=TextOverflow.Ellipsis);if(o.officeDepartment.isNotBlank())Text("• "+o.officeDepartment,color=TextMuted,style=MaterialTheme.typography.bodySmall,maxLines=1,overflow=TextOverflow.Ellipsis);if(o.sectionCell.isNotBlank())Text("• "+o.sectionCell,color=TextMuted,style=MaterialTheme.typography.labelSmall,maxLines=1,overflow=TextOverflow.Ellipsis)
+  Spacer(Modifier.height(8.dp));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(7.dp)){ActionMini(Icons.Default.Call,"Call",o.mobile()!=null,Green){o.mobile()?.let{dial(c,it)}};ActionMini(Icons.Default.Email,"Email",o.email.isNotBlank(),Navy){if(o.email.isNotBlank())email(c,o.email)};ActionMini(Icons.Default.Navigation,"Directions",true,Navy){directions(c,o)}};Spacer(Modifier.height(7.dp));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(7.dp)){ActionMini(Icons.Default.Share,"Share",true,Gold){shareContact(c,o)};ActionMini(Icons.Default.OpenInNew,"Details",true,Navy){onOpen(o)}}
+ }}
 }
-
-
-@Composable
-fun DashboardStats(all: List<Officer>, showing: Int, favorites: Int) {
+@Composable fun ActionMini(icon:androidx.compose.ui.graphics.vector.ImageVector,label:String,enabled:Boolean,tint:Color,onClick:()->Unit){FilledTonalButton(onClick,enabled=enabled,modifier=Modifier.weight(1f).height(44.dp),shape=RoundedCornerShape(11.dp),colors=ButtonDefaults.filledTonalButtonColors(containerColor=tint.copy(.10f),contentColor=tint),contentPadding=PaddingValues(horizontal=6.dp)){Icon(icon,label,Modifier.size(18.dp));Spacer(Modifier.width(4.dp));Text(label,style=MaterialTheme.typography.labelSmall,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis)}}
+(all: List<Officer>, showing: Int, favorites: Int) {
     val statItems = listOf(
         Triple(Icons.Default.Person, all.size.toString(), "STAFF"),
         Triple(Icons.Default.LocationOn, 41.toString(), "DISTRICTS"),
@@ -1204,6 +983,8 @@ fun formatDob(value: String): String {
     val d = parseDob(value) ?: return value
     return d.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH))
 }
+
+fun directions(context:Context,o:Officer){val destination=Uri.encode(o.locationLabel().ifBlank{o.officeDepartment});runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("geo:0,0?q="+destination)))}.onFailure{toast(context,"No maps application is available")}}
 
 fun dial(context: Context, number: String) { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${number.filter { it.isDigit() || it == '+' }}"))) }
 fun email(context: Context, address: String) { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$address"))) }
