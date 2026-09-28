@@ -105,7 +105,7 @@ data class DirectoryUiState(
     val district: String = "Jaipur",
     val designation: String = "All",
     val sectionCell: String = "All",
-    val tab: AppTab = AppTab.STAFF,
+    val tab: AppTab = AppTab.HOME,
     val darkMode: Boolean = false
 )
 
@@ -190,16 +190,11 @@ fun ElectionDirectoryApp() {
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    NavigationBarItem(state.tab == AppTab.HOME, { vm.setTab(AppTab.HOME) },
-                        icon = { Icon(Icons.Default.Home, null) }, label = { Text("Home") })
-                    NavigationBarItem(state.tab == AppTab.STAFF, { vm.setTab(AppTab.STAFF) },
-                        icon = { Icon(Icons.Default.Person, null) }, label = { Text("Staff") })
-                    NavigationBarItem(state.tab == AppTab.OFFICES, { vm.setTab(AppTab.OFFICES) },
-                        icon = { Icon(Icons.Default.Business, null) }, label = { Text("Offices") })
-                    NavigationBarItem(state.tab == AppTab.BIRTHDAYS, { vm.setTab(AppTab.BIRTHDAYS) },
-                        icon = { Icon(Icons.Default.Cake, null) }, label = { Text("Birthdays") })
-                    NavigationBarItem(state.tab == AppTab.FAVORITES, { vm.setTab(AppTab.FAVORITES) },
-                        icon = { Icon(Icons.Default.Star, null) }, label = { Text("Favorites") })
+                    NavigationBarItem(state.tab == AppTab.HOME, { vm.setTab(AppTab.HOME) }, icon = { Icon(Icons.Default.Home, "Home") }, label = { Text("Home") })
+                    NavigationBarItem(state.tab == AppTab.STAFF, { vm.setTab(AppTab.STAFF) }, icon = { Icon(Icons.Default.People, "Directory") }, label = { Text("Directory") })
+                    NavigationBarItem(state.tab == AppTab.OFFICES, { vm.setTab(AppTab.OFFICES) }, icon = { Icon(Icons.Default.Search, "Search") }, label = { Text("Search") })
+                    NavigationBarItem(state.tab == AppTab.FAVORITES, { vm.setTab(AppTab.FAVORITES) }, icon = { Icon(Icons.Default.Star, "Favorites") }, label = { Text("Favorites") })
+                    NavigationBarItem(state.tab == AppTab.BIRTHDAYS, { vm.setTab(AppTab.BIRTHDAYS) }, icon = { Icon(Icons.Default.MoreHoriz, "More") }, label = { Text("More") })
                 }
             }
         ) { padding ->
@@ -208,8 +203,8 @@ fun ElectionDirectoryApp() {
                 when (state.tab) {
                     AppTab.HOME -> HomeScreen(vm, all, onOpenStaff = { vm.setTab(AppTab.STAFF) }, onOpenOfficer = { selected = it })
                     AppTab.STAFF -> StaffScreen(vm, all, filtered, state, onOpen = { selected = it }, onFilter = { showFilters = true })
-                    AppTab.OFFICES -> OfficesScreen(all, onOpen = { vm.setTab(AppTab.STAFF); vm.setDistrict(it) }, onContact = { selected = it })
-                    AppTab.BIRTHDAYS -> BirthdaysScreen(all, onOpen = { selected = it }, onFavorite = vm::toggleFavorite)
+                    AppTab.OFFICES -> SearchScreen(vm, filtered, state, onOpen = { selected = it }, onFilter = { showFilters = true })
+                    AppTab.BIRTHDAYS -> MoreScreen(all, onOffices = { vm.setTab(AppTab.STAFF) }, onBirthdays = { }, onSettings = { showSettings = true }, onAbout = { showAbout = true })
                     AppTab.FAVORITES -> FavoritesScreen(favorites, onOpen = { selected = it }, onFavorite = vm::toggleFavorite)
                 }
             }
@@ -252,97 +247,70 @@ fun Header(onAbout: () -> Unit, onSettings: () -> Unit) {
 @Composable
 fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenStaff: () -> Unit, onOpenOfficer: (Officer) -> Unit) {
     val today = all.filter { isBirthdayToday(it.dob) }
-    val next = all.firstOrNull { it.dob.isNotBlank() }
-
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Spacer(Modifier.height(14.dp))
-        Text("Election Department Directory", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
-        Text("Rajasthan Government • Election Department", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(12.dp))
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeStatCard(Icons.Default.Person, all.size.toString(), "Total Staff", Navy, Modifier.weight(1f))
-            HomeStatCard(Icons.Default.LocationOn, "41", "Districts", Green, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeStatCard(Icons.Default.Badge, all.map { it.designation }.filter(String::isNotBlank).distinct().size.toString(), "Designations", Gold, Modifier.weight(1f))
-            HomeStatCard(Icons.Default.Work, all.map { it.sectionCell }.filter(String::isNotBlank).distinct().size.toString(), "Sections / Cells", Color(0xFF6F42C1), Modifier.weight(1f))
-        }
-
-        Spacer(Modifier.height(14.dp))
-        SearchField("", { q ->
-            if (q.isNotBlank()) {
-                vm.setQuery(q)
-                vm.setTab(AppTab.STAFF)
-            }
-        })
-        Spacer(Modifier.height(14.dp))
-        Text("Quick Filters", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextDark)
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HomeQuickCard(Icons.Default.LocationOn, "District", "Select District", Modifier.weight(1f)) {
-                vm.setTab(AppTab.STAFF)
-            }
-            HomeQuickCard(Icons.Default.Badge, "Designation", "Select Designation", Modifier.weight(1f)) {
-                vm.setTab(AppTab.STAFF)
-            }
-            HomeQuickCard(Icons.Default.Work, "Section / Cell", "Select Section", Modifier.weight(1f)) {
-                vm.setTab(AppTab.STAFF)
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = { onOpenStaff() },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Navy)
-        ) {
-            Icon(Icons.Default.Person, null)
-            Spacer(Modifier.width(7.dp))
-            Text("View Jaipur Staff", fontWeight = FontWeight.Bold)
-        }
-
-        Spacer(Modifier.height(14.dp))
-        if (today.isNotEmpty()) {
-            Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-                Column(Modifier.padding(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Cake, null, tint = Gold)
-                        Spacer(Modifier.width(7.dp))
-                        Text("Today's Birthdays", fontWeight = FontWeight.Bold, color = TextDark)
-                        Spacer(Modifier.weight(1f))
-                        Text(today.size.toString(), color = Navy, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    today.take(3).forEach { person ->
-                        Row(Modifier.fillMaxWidth().clickable { onOpenOfficer(person) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                            InitialAvatar(person.officerName)
-                            Spacer(Modifier.width(9.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(person.officerName, fontWeight = FontWeight.Bold, color = TextDark)
-                                Text(person.designation, color = TextMuted, style = MaterialTheme.typography.bodySmall)
-                            }
-                            Icon(Icons.Default.ChevronRight, null, tint = TextMuted)
+    val designationCount = all.map { it.designation }.filter(String::isNotBlank).distinct().size
+    val sectionCount = all.map { it.sectionCell }.filter(String::isNotBlank).distinct().size
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Surface(Modifier.fillMaxWidth(), color = Navy, shape = RoundedCornerShape(24.dp)) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("RAJASTHAN GOVERNMENT", color = Gold, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                    Text("Election Department Directory", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
+                    Text("निर्वाचन विभाग • Official Contact Directory", color = Color.White.copy(.78f), style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(14.dp))
+                    Surface(color = Color.White, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(horizontal = 14.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Search, "Search", tint = Navy); Spacer(Modifier.width(8.dp))
+                            Text("Search contacts by name, district, phone or email", color = TextMuted, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            IconButton(onClick = { vm.setTab(AppTab.OFFICES) }) { Icon(Icons.Default.ArrowForward, "Search") }
                         }
                     }
                 }
             }
-        } else {
-            Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Cake, null, tint = Gold)
-                    Spacer(Modifier.width(9.dp))
-                    Column {
-                        Text("Birthdays", fontWeight = FontWeight.Bold, color = TextDark)
-                        Text("No birthday today", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+        }
+        item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            HomeStatCard(Icons.Default.People, all.size.toString(), "TOTAL STAFF", Navy, Modifier.weight(1f))
+            HomeStatCard(Icons.Default.LocationOn, "41", "DISTRICTS", Green, Modifier.weight(1f))
+        }}
+        item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            HomeStatCard(Icons.Default.Badge, designationCount.toString(), "DESIGNATIONS", Gold, Modifier.weight(1f))
+            HomeStatCard(Icons.Default.Work, sectionCount.toString(), "SECTIONS / CELLS", Color(0xFF6F42C1), Modifier.weight(1f))
+        }}
+        item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            QuickActionCard(Icons.Default.People, "Directory", "Browse staff", Modifier.weight(1f)) { onOpenStaff() }
+            QuickActionCard(Icons.Default.FilterAlt, "Quick Filters", "Narrow results", Modifier.weight(1f)) { vm.setTab(AppTab.STAFF) }
+        }}
+        item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            QuickActionCard(Icons.Default.Cake, "Birthdays", "Today & upcoming", Modifier.weight(1f)) { vm.setTab(AppTab.BIRTHDAYS) }
+            QuickActionCard(Icons.Default.Star, "Favorites", "Saved contacts", Modifier.weight(1f)) { vm.setTab(AppTab.FAVORITES) }
+        }}
+        item {
+            if (today.isNotEmpty()) {
+                Surface(Modifier.fillMaxWidth(), color = Gold.copy(.10f), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Gold.copy(.30f))) {
+                    Column(Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Cake, "Birthdays", tint = Gold); Spacer(Modifier.width(8.dp)); Text("Today's Birthdays", fontWeight = FontWeight.Bold, color = TextDark); Spacer(Modifier.weight(1f)); Text(today.size.toString(), color = Navy, fontWeight = FontWeight.Bold) }
+                        Spacer(Modifier.height(8.dp))
+                        today.take(3).forEach { person -> Row(Modifier.fillMaxWidth().clickable { onOpenOfficer(person) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            InitialAvatar(person.officerName); Spacer(Modifier.width(9.dp)); Column(Modifier.weight(1f)) { Text(person.officerName, fontWeight = FontWeight.Bold, color = TextDark); Text(person.designation, color = TextMuted, style = MaterialTheme.typography.bodySmall) }; Icon(Icons.Default.ChevronRight, "Open contact", tint = TextMuted)
+                        }}
                     }
+                }
+            } else {
+                Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Info, "Information", tint = Navy); Spacer(Modifier.width(9.dp)); Column { Text("Directory ready", fontWeight = FontWeight.Bold, color = TextDark); Text("Offline access to official contact information.", color = TextMuted, style = MaterialTheme.typography.bodySmall) } }
                 }
             }
         }
     }
 }
-
+@Composable
+fun QuickActionCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Surface(modifier.height(82.dp).clickable(onClick = onClick), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(Navy.copy(.08f)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = Navy, modifier = Modifier.size(23.dp)) }
+            Spacer(Modifier.width(9.dp)); Column(Modifier.weight(1f)) { Text(title, color = TextDark, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(subtitle, color = TextMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
+    }
+}
 @Composable
 fun HomeStatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String, tint: Color, modifier: Modifier = Modifier) {
     Surface(modifier, color = SurfaceWhite, shape = RoundedCornerShape(14.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
@@ -584,6 +552,40 @@ fun InitialAvatar(name: String) {
 fun avatarColor(name: String): Color = listOf(Color(0xFF2979FF), Color(0xFF7E57C2), Color(0xFF00897B), Color(0xFFE91E63), Color(0xFFEF6C00))[name.hashCode().and(Int.MAX_VALUE) % 5]
 fun primaryDistrict(o: Officer): String = if (o.subLocation.isNotBlank()) o.district.split(",").last().trim() else o.district.split(",").last().trim()
 
+@Composable
+fun SearchScreen(vm: DirectoryViewModel, list: List<Officer>, state: DirectoryUiState, onOpen: (Officer) -> Unit, onFilter: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+        Text("Search Directory", Modifier.padding(top = 14.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
+        Text("Search by name, district, designation, office, phone or email.", color = TextMuted)
+        Spacer(Modifier.height(12.dp)); SearchField(state.query, vm::setQuery); Spacer(Modifier.height(9.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onFilter, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(13.dp)) { Icon(Icons.Default.FilterAlt, "Filters"); Spacer(Modifier.width(6.dp)); Text("Filters") }
+            OutlinedButton(onClick = { vm.setQuery("") }, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(13.dp)) { Text("Clear search") }
+        }
+        Spacer(Modifier.height(8.dp)); Text(list.size.toString()+" matching contacts", color = TextMuted, style = MaterialTheme.typography.labelLarge); Spacer(Modifier.height(6.dp))
+        if (list.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { EmptyState("No contacts found", "Try another name, mobile number, district or email address.") }
+        else LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 16.dp)) { items(list, key = { it.id }) { officer -> OfficerCard(officer, onOpen, vm::toggleFavorite) } }
+    }
+}
+@Composable
+fun MoreScreen(all: List<Officer>, onOffices: () -> Unit, onBirthdays: () -> Unit, onSettings: () -> Unit, onAbout: () -> Unit) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { Text("More", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark); Text("Tools and information", color = TextMuted) }
+        item { MoreOption(Icons.Default.Business, "Office Directory", "Browse staff by district and office", onOffices) }
+        item { MoreOption(Icons.Default.Cake, "Birthdays", "Today and upcoming birthdays", onBirthdays) }
+        item { MoreOption(Icons.Default.Settings, "Settings", "Appearance and administrator data tools", onSettings) }
+        item { MoreOption(Icons.Default.Info, "About", all.size.toString()+" offline directory records", onAbout) }
+    }
+}
+@Composable
+fun MoreOption(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    Card(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceWhite), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Navy.copy(.08f)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = Navy) }
+            Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(title, color = TextDark, fontWeight = FontWeight.Bold); Text(subtitle, color = TextMuted, style = MaterialTheme.typography.bodySmall) }; Icon(Icons.Default.ChevronRight, "Open", tint = TextMuted)
+        }
+    }
+}
 @Composable
 fun OfficesScreen(all: List<Officer>, onOpen: (String) -> Unit, onContact: (Officer) -> Unit) {
     val grouped = all.groupBy { primaryDistrict(it) }.toSortedMap()
