@@ -718,6 +718,15 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
     var localDepartment by remember(state.department) { mutableStateOf(state.department) }
     var localOffice by remember(state.office) { mutableStateOf(state.office) }
 
+    val matchingCount = all.count { officer ->
+        val districtMatch = localDistrict == "All" || officer.district.split(",").any { d -> d.trim().equals(localDistrict, true) }
+        val designationMatch = localDesignation == "All" || officer.designation.equals(localDesignation, true)
+        val departmentMatch = localDepartment == "All" || officer.officeDepartment.equals(localDepartment, true)
+        val officeMatch = localOffice == "All" || officer.subLocation.equals(localOffice, true)
+        val sectionMatch = localSection == "All" || officer.sectionCell.equals(localSection, true)
+        districtMatch && designationMatch && departmentMatch && officeMatch && sectionMatch
+    }
+
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)
