@@ -105,6 +105,8 @@ data class DirectoryUiState(
     val district: String = "Jaipur",
     val designation: String = "All",
     val sectionCell: String = "All",
+    val department: String = "All",
+    val office: String = "All",
     val tab: AppTab = AppTab.HOME,
     val darkMode: Boolean = false
 )
@@ -123,6 +125,10 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
         listOf("All") + list.map { it.designation }.filter { it.isNotBlank() }.distinct().sorted()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("All"))
 
+    val departments: StateFlow<List<String>> = officers.map { list -> listOf("All") + list.map { it.officeDepartment.trim() }.filter { it.isNotBlank() }.distinct().sorted() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("All"))
+
+    val offices: StateFlow<List<String>> = officers.map { list -> listOf("All") + list.map { it.subLocation.trim() }.filter { it.isNotBlank() }.distinct().sorted() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("All"))
+
     val sectionCells: StateFlow<List<String>> = officers.map { list ->
         listOf("All") + list.map { it.sectionCell }.filter { it.isNotBlank() }.distinct().sorted()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("All"))
@@ -135,8 +141,10 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
             val matchesQuery = q.isBlank() || searchable.any { it.lowercase(Locale.getDefault()).contains(q) }
             val matchesDistrict = s.district == "All" || o.district.split(",").any { it.trim().equals(s.district, true) }
             val matchesDesignation = s.designation == "All" || o.designation.equals(s.designation, true)
+            val matchesDepartment = s.department == "All" || o.officeDepartment.equals(s.department, true)
+            val matchesOffice = s.office == "All" || o.subLocation.equals(s.office, true)
             val matchesSection = s.sectionCell == "All" || o.sectionCell.equals(s.sectionCell, true)
-            matchesQuery && matchesDistrict && matchesDesignation && matchesSection
+            matchesQuery && matchesDistrict && matchesDesignation && matchesDepartment && matchesOffice && matchesSection
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -147,9 +155,11 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
     fun setDistrict(v: String) { _state.update { it.copy(district = v) } }
     fun setDesignation(v: String) { _state.update { it.copy(designation = v) } }
     fun setSectionCell(v: String) { _state.update { it.copy(sectionCell = v) } }
+    fun setDepartment(v: String) { _state.update { it.copy(department = v) } }
+    fun setOffice(v: String) { _state.update { it.copy(office = v) } }
     fun setTab(v: AppTab) { _state.update { it.copy(tab = v) } }
-    fun clearFilters() { _state.update { it.copy(query = "", district = "All", designation = "All", sectionCell = "All") } }
-    fun clearFilterOnly() { _state.update { it.copy(district = "Jaipur", designation = "All", sectionCell = "All") } }
+    fun clearFilters() { _state.update { it.copy(query = "", district = "All", designation = "All", department = "All", office = "All", sectionCell = "All") } }
+    fun clearFilterOnly() { _state.update { it.copy(district = "Jaipur", designation = "All", department = "All", office = "All", sectionCell = "All") } }
     fun setDarkMode(v: Boolean) { _state.update { it.copy(darkMode = v) } }
     fun replaceData(items: List<Officer>) = viewModelScope.launch { repo.replace(items) }
     fun toggleFavorite(o: Officer) = viewModelScope.launch { repo.setFavorite(o.id, !o.isFavorite) }
@@ -478,51 +488,38 @@ fun FilterButton(label: String, value: String, modifier: Modifier = Modifier, on
 @Composable
 fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> Unit) {
     val context = LocalContext.current
-    Card(
-        Modifier.fillMaxWidth().clickable { onOpen(o) },
-        shape = RoundedCornerShape(15.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
+    Card(Modifier.fillMaxWidth().clickable { onOpen(o) }, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = SurfaceWhite), border = androidx.compose.foundation.BorderStroke(1.dp, Border), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 InitialAvatar(o.officerName)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(o.officerName, fontWeight = FontWeight.Bold, color = TextDark, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(2.dp))
-                    Text(o.designation.ifBlank { "Designation not available" }, color = Navy, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(o.designation.ifBlank { "Designation not available" }, color = Navy, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-                IconButton(onClick = { onFavorite(o) }, modifier = Modifier.size(38.dp)) {
-                    Icon(if (o.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, "Favorite", tint = if (o.isFavorite) Gold else Color(0xFF7A8494), modifier = Modifier.size(21.dp))
-                }
-                Icon(Icons.Default.ChevronRight, null, tint = TextMuted, modifier = Modifier.size(20.dp))
+                IconButton(onClick = { onFavorite(o) }, modifier = Modifier.size(48.dp)) { Icon(if (o.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, "Favorite", tint = if (o.isFavorite) Gold else TextMuted) }
             }
-
             Spacer(Modifier.height(7.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.LocationOn, null, Modifier.size(16.dp), tint = Navy)
                 Spacer(Modifier.width(5.dp))
                 Text(o.locationLabel().ifBlank { "Location not available" }, color = TextMuted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                o.mobile()?.let { SmallAction("Call", Icons.Default.Call) { dial(context, it) } }
-                if (o.email.isNotBlank()) {
-                    Spacer(Modifier.width(5.dp))
-                    SmallAction("Email", Icons.Default.Email) { email(context, o.email) }
-                }
             }
-
-            if (o.sectionCell.isNotBlank()) {
-                Spacer(Modifier.height(5.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Work, null, Modifier.size(15.dp), tint = TextMuted)
-                    Spacer(Modifier.width(5.dp))
-                    Text(o.sectionCell, color = TextMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+            if (o.officeDepartment.isNotBlank()) Text(o.officeDepartment, color = TextMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(7.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                o.mobile()?.let { SmallAction("Call", Icons.Default.Call) { dial(context, it) } }
+                if (o.email.isNotBlank()) SmallAction("Email", Icons.Default.Email) { email(context, o.email) }
+                SmallAction("Directions", Icons.Default.Navigation) { directions(context, o) }
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SmallAction("Share", Icons.Default.Share) { shareContact(context, o) }
+                SmallAction("Details", Icons.Default.OpenInNew) { onOpen(o) }
             }
         }
     }
 }
-
 
 @Composable
 fun OfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> Unit) {
@@ -707,41 +704,11 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
             .filter { it.isNotBlank() }.distinct().sorted()
     }
 
-    val sectionValues = remember(all, localDistrict, localDesignation) {
-        val source = all.filter { officer ->
-            val districtMatch = localDistrict == "All" ||
-                officer.district.split(",").any { d -> d.trim().equals(localDistrict, true) }
-            val designationMatch = localDesignation == "All" ||
-                officer.designation.equals(localDesignation, true)
-            districtMatch && designationMatch
-        }
-        listOf("All") + source.map { it.sectionCell.trim() }
-            .filter { it.isNotBlank() }.distinct().sorted()
-    }
+    val departmentValues = remember(all) { listOf("All") + all.map { it.officeDepartment.trim() }.filter { it.isNotBlank() }.distinct().sorted() }
+    val officeValues = remember(all) { listOf("All") + all.map { it.subLocation.trim() }.filter { it.isNotBlank() }.distinct().sorted() }
 
-    // Keep selections valid when a parent filter changes.
-    LaunchedEffect(localDistrict) {
-        if (localDesignation != "All" && localDesignation !in designationValues) {
-            localDesignation = "All"
-        }
-    }
-    LaunchedEffect(localDistrict, localDesignation) {
-        if (localSection != "All" && localSection !in sectionValues) {
-            localSection = "All"
-        }
-    }
-
-    val matchingCount = remember(all, localDistrict, localDesignation, localSection) {
-        all.count { officer ->
-            val districtMatch = localDistrict == "All" ||
-                officer.district.split(",").any { d -> d.trim().equals(localDistrict, true) }
-            val designationMatch = localDesignation == "All" ||
-                officer.designation.equals(localDesignation, true)
-            val sectionMatch = localSection == "All" ||
-                officer.sectionCell.equals(localSection, true)
-            districtMatch && designationMatch && sectionMatch
-        }
-    }
+    var localDepartment by remember(state.department) { mutableStateOf(state.department) }
+    var localOffice by remember(state.office) { mutableStateOf(state.office) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -764,6 +731,8 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
                 TextButton({
                     localDistrict = "All"
                     localDesignation = "All"
+                    localDepartment = "All"
+                    localOffice = "All"
                     localSection = "All"
                     vm.clearFilterOnly()
                 }) { Text("Clear all") }
@@ -796,6 +765,14 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
 
             Spacer(Modifier.height(10.dp))
 
+            FilterSelector(label = "Department", selected = localDepartment, values = departmentValues, onSelect = { localDepartment = it })
+
+            Spacer(Modifier.height(10.dp))
+
+            FilterSelector(label = "Office", selected = localOffice, values = officeValues, onSelect = { localOffice = it })
+
+            Spacer(Modifier.height(10.dp))
+
             FilterSelector(
                 label = "Section / Cell",
                 selected = localSection,
@@ -809,6 +786,8 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
                 {
                     vm.setDistrict(localDistrict)
                     vm.setDesignation(localDesignation)
+                    vm.setDepartment(localDepartment)
+                    vm.setOffice(localOffice)
                     vm.setSectionCell(localSection)
                     onDismiss()
                 },
@@ -1205,6 +1184,12 @@ fun daysUntilBirthday(value: String): Int {
 fun formatDob(value: String): String {
     val d = parseDob(value) ?: return value
     return d.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH))
+}
+
+fun directions(context: Context, o: Officer) {
+    val destination = Uri.encode(o.locationLabel().ifBlank { o.officeDepartment })
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + destination))) }
+        .onFailure { toast(context, "No maps application is available") }
 }
 
 fun dial(context: Context, number: String) { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${number.filter { it.isDigit() || it == '+' }}"))) }
