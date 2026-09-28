@@ -224,7 +224,7 @@ fun Header(onAbout: () -> Unit, onSettings: () -> Unit) {
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Election Contact Directory", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                Text("Election Department Directory", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
                 Text("Election Department • Rajasthan Government", color = Color.White.copy(.78f), style = MaterialTheme.typography.labelMedium)
             }
             IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "Settings", tint = Color.White) }
@@ -945,7 +945,7 @@ fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: Strin
 @Composable
 fun AboutSheet(total: Int, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) { Column(Modifier.fillMaxWidth().padding(24.dp).padding(bottom = 28.dp)) {
-        Text("About", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); Spacer(Modifier.height(8.dp)); Text("Election Contact Directory", style = MaterialTheme.typography.titleLarge, color = Navy); Text("Election Department • Rajasthan Government", color = Color.Gray); Spacer(Modifier.height(18.dp)); DetailRow(Icons.Default.Person, "$total contacts"); DetailRow(Icons.Default.Info, "Works offline"); DetailRow(Icons.Default.Settings, "Directory updated: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())}"); Spacer(Modifier.height(14.dp)); Text("Designed for quick, reliable access to official staff contact information.", color = Color.Gray) }
+        Text("About", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); Spacer(Modifier.height(8.dp)); Text("Election Department Directory", style = MaterialTheme.typography.titleLarge, color = Navy); Text("Election Department • Rajasthan Government", color = Color.Gray); Spacer(Modifier.height(18.dp)); DetailRow(Icons.Default.Person, "$total contacts"); DetailRow(Icons.Default.Info, "Works offline"); DetailRow(Icons.Default.Settings, "Directory updated: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())}"); Spacer(Modifier.height(14.dp)); Text("Designed for quick, reliable access to official staff contact information.", color = Color.Gray) }
     }
 }
 
