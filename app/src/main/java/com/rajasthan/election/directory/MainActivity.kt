@@ -316,7 +316,7 @@ fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>,
 fun DashboardStats(all: List<Officer>, showing: Int, favorites: Int) {
     val statItems = listOf(
         Triple(Icons.Default.Person, all.size.toString(), "STAFF"),
-        Triple(Icons.Default.LocationOn, all.flatMap { it.district.split(",") }.map(String::trim).filter(String::isNotBlank).distinct().size.toString(), "DISTRICTS"),
+        Triple(Icons.Default.LocationOn, 41.toString(), "DISTRICTS"),
         Triple(Icons.Default.Star, favorites.toString(), "FAVORITES"),
         Triple(Icons.Default.Cake, all.count { isBirthdayToday(it.dob) }.toString(), "TODAY"),
         Triple(Icons.Default.FilterAlt, showing.toString(), "SHOWING")
