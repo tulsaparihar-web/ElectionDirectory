@@ -704,6 +704,14 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
             .filter { it.isNotBlank() }.distinct().sorted()
     }
 
+    val sectionValues = remember(all, localDistrict, localDesignation) {
+        val source = all.filter { officer ->
+            (localDistrict == "All" || officer.district.split(",").any { d -> d.trim().equals(localDistrict, true) }) &&
+            (localDesignation == "All" || officer.designation.equals(localDesignation, true))
+        }
+        listOf("All") + source.map { it.sectionCell.trim() }.filter { it.isNotBlank() }.distinct().sorted()
+    }
+
     val departmentValues = remember(all) { listOf("All") + all.map { it.officeDepartment.trim() }.filter { it.isNotBlank() }.distinct().sorted() }
     val officeValues = remember(all) { listOf("All") + all.map { it.subLocation.trim() }.filter { it.isNotBlank() }.distinct().sorted() }
 
