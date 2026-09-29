@@ -164,6 +164,29 @@ private val TextMuted = Color(0xFF667085)
 
 fun isCeoHqStaff(o: Officer): Boolean = o.dob.isNotBlank()
 
+// CEO HQ seniority order supplied for the directory.
+fun ceoHqSeniorityRank(o: Officer): Int {
+    val d = o.designation.trim().uppercase(Locale.getDefault())
+        .replace(Regex("[^A-Z0-9 ]"), " ")
+        .replace(Regex("\\s+"), " ").trim()
+    return when {
+        d == "CEO" || d == "CHIEF ELECTORAL OFFICER" -> 0
+        d == "OSD" || d.contains("OFFICER ON SPECIAL DUTY") -> 1
+        d.contains("JOINT CEO IT") || d.contains("JOINT CHIEF ELECTORAL OFFICER IT") -> 2
+        d.contains("JOINT CEO") || d.contains("JOINT CHIEF ELECTORAL OFFICER") -> 3
+        d == "FA" || d.contains("FINANCIAL ADVISER") || d.contains("FINANCIAL ADVISOR") -> 4
+        d.contains("ACEO") || d.contains("ADDITIONAL CHIEF ELECTORAL OFFICER") -> 5
+        d.contains("DY CEO IT") || d.contains("DEPUTY CEO IT") || d.contains("DEPUTY CHIEF ELECTORAL OFFICER IT") -> 7
+        d.contains("DY CEO") || d.contains("DEPUTY CEO") || d.contains("DEPUTY CHIEF ELECTORAL OFFICER") -> 6
+        else -> 8
+    }
+}
+
+fun sortCeoHqBySeniority(list: List<Officer>): List<Officer> = list.sortedWith(
+    compareBy<Officer>({ if (isCeoHqStaff(it)) 0 else 1 }, { ceoHqSeniorityRank(it) },
+        { it.designation.lowercase(Locale.getDefault()) }, { it.officerName.lowercase(Locale.getDefault()) })
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -379,6 +402,7 @@ fun HomeQuickCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: 
 
 @Composable
 fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>, state: DirectoryUiState, onOpen: (Officer) -> Unit, onFilter: () -> Unit) {
+    val displayList = if (state.district.equals("Jaipur", true)) sortCeoHqBySeniority(list) else list
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -447,7 +471,7 @@ fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>,
                 verticalArrangement = Arrangement.spacedBy(7.dp),
                 contentPadding = PaddingValues(top = 2.dp, bottom = 12.dp)
             ) {
-                items(list, key = { it.id }) { CompactOfficerCard(it, onOpen) }
+                items(displayList, key = { it.id }) { CompactOfficerCard(it, onOpen) }
             }
         }
     }
@@ -507,7 +531,8 @@ fun SearchField(value: String, onChange: (String) -> Unit) {
             unfocusedLeadingIconColor = TextMuted,
             cursorColor = Navy
         ),
-        placeholder = { Text("Search name, mobile, office, email or ID…", color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        label = { Text("Search directory") },
+        placeholder = { Text("Name, mobile, office, email or ID…", color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingIcon = { Icon(Icons.Default.Search, null) },
         trailingIcon = { if (value.isNotEmpty()) IconButton({ onChange("") }) { Icon(Icons.Default.Clear, "Clear") } }
     )
@@ -694,34 +719,63 @@ fun OfficeCard(district: String, staff: List<Officer>, onOpen: (String) -> Unit,
 
 @Composable
 fun BirthdaysScreen(list: List<Officer>, onOpen: (Officer) -> Unit) {
-    val today = list.filter { isBirthdayToday(it.dob) }.sortedBy { it.officerName.lowercase(Locale.getDefault()) }
+    val today = list.filter { isBirthdayToday(it.dob) }
+        .sortedBy { it.officerName.lowercase(Locale.getDefault()) }
     val upcoming = list.filter { it.dob.isNotBlank() && !isBirthdayToday(it.dob) }
         .sortedBy { daysUntilBirthday(it.dob) }
         .take(20)
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Birthdays", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
-        Text("Birth dates are matched by day and month; the birth year is not required.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(12.dp))
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 20.dp)
+    ) {
+        item {
+            Text("Birthdays", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
+            Spacer(Modifier.height(2.dp))
+            Text("Birth dates are matched by day and month.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
+        }
+
         if (today.isNotEmpty()) {
-            Surface(color = Gold.copy(.14f), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Cake, null, tint = Gold); Spacer(Modifier.width(8.dp)); Text("Today's Birthdays", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium) }
-                    Spacer(Modifier.height(8.dp))
-                    today.forEach { BirthdayRow(it, onOpen) }
+            item {
+                Surface(color = Gold.copy(.12f), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Cake, "Today's birthdays", tint = Gold, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Text("Today's Birthdays", fontWeight = FontWeight.Bold, color = TextDark)
+                        Spacer(Modifier.weight(1f))
+                        Text(today.size.toString(), color = Navy, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
+            items(today, key = { "today-" + it.id }) { BirthdayRow(it, onOpen) }
         } else {
-            EmptyState("No birthday today", if (upcoming.isEmpty()) "No DOB information is available yet." else "No birthday today. Upcoming birthdays are shown below.")
-        }
-        if (upcoming.isNotEmpty()) {
-            Spacer(Modifier.height(18.dp)); Text("Upcoming", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(7.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-                items(upcoming, key = { "b-${it.id}" }) { BirthdayRow(it, onOpen) }
+            item {
+                Surface(color = SurfaceWhite, shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border), modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Cake, "Birthdays", tint = Gold, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("No birthday today", fontWeight = FontWeight.Bold, color = TextDark)
+                            if (upcoming.isNotEmpty()) Text("Upcoming birthdays are shown below.", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
             }
+        }
+
+        if (upcoming.isNotEmpty()) {
+            item {
+                Spacer(Modifier.height(4.dp))
+                Text("Upcoming", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = TextDark)
+            }
+            items(upcoming, key = { "upcoming-" + it.id }) { BirthdayRow(it, onOpen) }
+        } else if (today.isEmpty()) {
+            item { Text("No DOB information is available yet.", color = TextMuted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp)) }
         }
     }
 }
-
 @Composable
 fun BirthdayRow(o: Officer, onOpen: (Officer) -> Unit) {
     Card(Modifier.fillMaxWidth().clickable { onOpen(o) }, shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
