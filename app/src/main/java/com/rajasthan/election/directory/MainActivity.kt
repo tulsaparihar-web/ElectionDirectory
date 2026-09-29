@@ -105,7 +105,7 @@ data class DirectoryUiState(
     val district: String = "Jaipur",
     val designation: String = "All",
     val sectionCell: String = "All",
-    val tab: AppTab = AppTab.STAFF,
+    val tab: AppTab = AppTab.DIRECTORY,
     val darkMode: Boolean = false
 )
 
@@ -280,7 +280,7 @@ fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenStaff: () -> Un
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HomeQuickCard(Icons.Default.LocationOn, "District", "Select District", Modifier.weight(1f)) {
-                vm.setTab(AppTab.STAFF)
+                vm.setTab(AppTab.DIRECTORY)
             }
             HomeQuickCard(Icons.Default.Badge, "Designation", "Select Designation", Modifier.weight(1f)) {
                 vm.setTab(AppTab.STAFF)
@@ -675,7 +675,7 @@ fun BirthdaysScreen(list: List<Officer>, onOpen: (Officer) -> Unit) {
         if (upcoming.isNotEmpty()) {
             Spacer(Modifier.height(18.dp)); Text("Upcoming", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(7.dp))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-                items(upcoming, key = { "b-${it.id}" }) { BirthdayRow(it, onOpen, onFavorite) }
+                items(upcoming, key = { "b-${it.id}" }) { BirthdayRow(it, onOpen) }
             }
         }
     }
