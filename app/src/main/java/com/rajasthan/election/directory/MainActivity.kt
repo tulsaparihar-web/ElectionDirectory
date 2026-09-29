@@ -495,7 +495,7 @@ fun SearchField(value: String, onChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        modifier = Modifier.fillMaxWidth().height(46.dp),
+        modifier = Modifier.fillMaxWidth().height(56.dp),
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
