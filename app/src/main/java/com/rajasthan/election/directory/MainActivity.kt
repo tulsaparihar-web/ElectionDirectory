@@ -162,6 +162,8 @@ private val Border = Color(0xFFD9E0EA)
 private val TextDark = Color(0xFF182235)
 private val TextMuted = Color(0xFF667085)
 
+fun isCeoHqStaff(o: Officer): Boolean = o.dob.isNotBlank()
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -544,7 +546,28 @@ fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit) {
                 Column(Modifier.weight(1f)) {
                     Text(o.officerName, fontWeight = FontWeight.Bold, color = TextDark, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(2.dp))
-                    Text(o.designation.ifBlank { "Designation not available" }, color = Navy, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            o.designation.ifBlank { "Designation not available" },
+                            color = Navy,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isCeoHqStaff(o)) {
+                            Spacer(Modifier.width(6.dp))
+                            Surface(color = Gold.copy(.14f), shape = RoundedCornerShape(7.dp)) {
+                                Text(
+                                    "CEO HQ",
+                                    color = Color(0xFF8A5A00),
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                    }
                 }
                 Icon(Icons.Default.ChevronRight, null, tint = TextMuted, modifier = Modifier.size(20.dp))
             }
@@ -1160,7 +1183,20 @@ fun OfficerDetails(o: Officer, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                InitialAvatar(o.officerName); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(o.officerName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); Text(o.designation, color = Navy, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                InitialAvatar(o.officerName); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) {
+                Text(o.officerName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(o.designation, color = Navy, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    if (isCeoHqStaff(o)) {
+                        Spacer(Modifier.width(7.dp))
+                        Surface(color = Gold.copy(.14f), shape = RoundedCornerShape(7.dp)) {
+                            Text("CEO HQ", color = Color(0xFF8A5A00), fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
+                        }
+                    }
+                }
+            }
             }
             Spacer(Modifier.height(12.dp)); if (o.sectionCell.isNotBlank()) DetailRow(Icons.Default.Work, "Section / Cell: ${o.sectionCell}")
             if (o.employeeId.isNotBlank()) DetailRow(Icons.Default.Person, "Employee ID: ${o.employeeId}")
