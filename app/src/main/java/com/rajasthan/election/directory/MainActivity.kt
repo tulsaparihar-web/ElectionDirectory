@@ -97,7 +97,7 @@ class OfficerRepository(private val dao: OfficerDao) {
     suspend fun replace(items: List<Officer>) { dao.deleteAll(); dao.insertAll(items) }
 }
 
-enum class AppTab(val label: String) { HOME("Home"), STAFF("Staff"), OFFICES("Offices"), BIRTHDAYS("Birthdays"), FAVORITES("Favorites") }
+enum class AppTab(val label: String) { HOME("Home"), DIRECTORY("Directory"), OFFICES("Offices"), BIRTHDAYS("Birthdays"), MORE("More") }
 
 data class DirectoryUiState(
     val query: String = "",
@@ -140,8 +140,6 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val favorites: StateFlow<List<Officer>> = officers.map { it.filter(Officer::isFavorite) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setQuery(v: String) { _state.update { it.copy(query = v) } }
     fun setDistrict(v: String) { _state.update { it.copy(district = v) } }
@@ -152,7 +150,6 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
     fun clearFilterOnly() { _state.update { it.copy(district = "Jaipur", designation = "All", sectionCell = "All") } }
     fun setDarkMode(v: Boolean) { _state.update { it.copy(darkMode = v) } }
     fun replaceData(items: List<Officer>) = viewModelScope.launch { repo.replace(items) }
-    fun toggleFavorite(o: Officer) = viewModelScope.launch { repo.setFavorite(o.id, !o.isFavorite) }
 }
 
 private val Navy = Color(0xFF173B7A)
@@ -178,7 +175,6 @@ fun ElectionDirectoryApp() {
     val state by vm.state.collectAsState()
     val all by vm.officers.collectAsState()
     val filtered by vm.filtered.collectAsState()
-    val favorites by vm.favorites.collectAsState()
     var selected by remember { mutableStateOf<Officer?>(null) }
     var showFilters by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
@@ -192,31 +188,33 @@ fun ElectionDirectoryApp() {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                     NavigationBarItem(state.tab == AppTab.HOME, { vm.setTab(AppTab.HOME) },
                         icon = { Icon(Icons.Default.Home, null) }, label = { Text("Home") })
-                    NavigationBarItem(state.tab == AppTab.STAFF, { vm.setTab(AppTab.STAFF) },
-                        icon = { Icon(Icons.Default.Person, null) }, label = { Text("Staff") })
-                    NavigationBarItem(state.tab == AppTab.OFFICES, { vm.setTab(AppTab.OFFICES) },
-                        icon = { Icon(Icons.Default.Business, null) }, label = { Text("Offices") })
+                    NavigationBarItem(state.tab == AppTab.DIRECTORY, { vm.setTab(AppTab.DIRECTORY) },
+                        icon = { Icon(Icons.Default.Person, null) }, label = { Text("Directory") })
                     NavigationBarItem(state.tab == AppTab.BIRTHDAYS, { vm.setTab(AppTab.BIRTHDAYS) },
                         icon = { Icon(Icons.Default.Cake, null) }, label = { Text("Birthdays") })
-                    NavigationBarItem(state.tab == AppTab.FAVORITES, { vm.setTab(AppTab.FAVORITES) },
-                        icon = { Icon(Icons.Default.Star, null) }, label = { Text("Favorites") })
+                    NavigationBarItem(state.tab == AppTab.MORE, { vm.setTab(AppTab.MORE) },
+                        icon = { Icon(Icons.Default.MoreHoriz, null) }, label = { Text("More") })
                 }
             }
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
                 Header(onAbout = { showAbout = true }, onSettings = { showSettings = true })
                 when (state.tab) {
-                    AppTab.HOME -> HomeScreen(vm, all, onOpenStaff = { vm.setTab(AppTab.STAFF) }, onOpenOfficer = { selected = it })
-                    AppTab.STAFF -> StaffScreen(vm, all, filtered, state, onOpen = { selected = it }, onFilter = { showFilters = true })
-                    AppTab.OFFICES -> OfficesScreen(all, onOpen = { vm.setTab(AppTab.STAFF); vm.setDistrict(it) }, onContact = { selected = it })
-                    AppTab.BIRTHDAYS -> BirthdaysScreen(all, onOpen = { selected = it }, onFavorite = vm::toggleFavorite)
-                    AppTab.FAVORITES -> FavoritesScreen(favorites, onOpen = { selected = it }, onFavorite = vm::toggleFavorite)
+                    AppTab.HOME -> HomeScreen(vm, all, onOpenStaff = { vm.setTab(AppTab.DIRECTORY) }, onOpenOfficer = { selected = it })
+                    AppTab.DIRECTORY -> StaffScreen(vm, all, filtered, state, onOpen = { selected = it }, onFilter = { showFilters = true })
+                    AppTab.OFFICES -> OfficesScreen(all, onOpen = { vm.setTab(AppTab.DIRECTORY); vm.setDistrict(it) }, onContact = { selected = it })
+                    AppTab.BIRTHDAYS -> BirthdaysScreen(all, onOpen = { selected = it })
+                    AppTab.MORE -> MoreScreen(
+                        onOffices = { vm.setTab(AppTab.OFFICES) },
+                        onSettings = { showSettings = true },
+                        onAbout = { showAbout = true }
+                    )
                 }
             }
         }
     }
 
-    selected?.let { OfficerDetails(it, onDismiss = { selected = null }, onFavorite = { vm.toggleFavorite(it) }) }
+    selected?.let { OfficerDetails(it, onDismiss = { selected = null }) }
     if (showFilters) FilterSheet(vm, all, onDismiss = { showFilters = false })
     if (showAbout) AboutSheet(all.size, onDismiss = { showAbout = false })
     if (showSettings) SettingsSheet(state.darkMode, onDarkMode = vm::setDarkMode, onImport = { items -> vm.replaceData(items) }, onDismiss = { showSettings = false })
@@ -271,11 +269,11 @@ fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenStaff: () -> Un
         }
 
         Spacer(Modifier.height(14.dp))
-        SearchField("", { q ->
-            if (q.isNotBlank()) {
-                vm.setQuery(q)
-                vm.setTab(AppTab.STAFF)
-            }
+        var homeQuery by remember { mutableStateOf("") }
+        SearchField(homeQuery, { q ->
+            homeQuery = q
+            vm.setQuery(q)
+            if (q.isNotBlank()) vm.setTab(AppTab.DIRECTORY)
         })
         Spacer(Modifier.height(14.dp))
         Text("Quick Filters", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextDark)
@@ -293,14 +291,14 @@ fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenStaff: () -> Un
         }
         Spacer(Modifier.height(12.dp))
         Button(
-            onClick = { onOpenStaff() },
+            onClick = { vm.setDistrict("Jaipur"); vm.setQuery(""); onOpenStaff() },
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Navy)
         ) {
             Icon(Icons.Default.Person, null)
             Spacer(Modifier.width(7.dp))
-            Text("View Jaipur Staff", fontWeight = FontWeight.Bold)
+            Text("View CEO Office HQ Staff", fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(14.dp))
@@ -378,7 +376,7 @@ fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>,
             Column(Modifier.weight(1f)) {
                 Text("Staff Directory", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextDark)
                 Text(
-                    if (state.district == "All") "All Rajasthan staff" else "\${state.district} staff",
+                    if (state.district == "All") "All Rajasthan staff" else if (state.district.equals("Jaipur", true)) "CEO Office HQ Staff" else "\${state.district} staff",
                     color = TextMuted,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -428,7 +426,7 @@ fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>,
                 contentPadding = PaddingValues(top = 2.dp, bottom = 12.dp)
             ) {
                 items(list, key = { it.id }) {
-                    CompactOfficerCard(it, onOpen, vm::toggleFavorite)
+                    CompactOfficerCard(it, onOpen)
                 }
             }
         }
@@ -441,7 +439,6 @@ fun DashboardStats(all: List<Officer>, showing: Int, favorites: Int) {
     val statItems = listOf(
         Triple(Icons.Default.Person, all.size.toString(), "STAFF"),
         Triple(Icons.Default.LocationOn, 41.toString(), "DISTRICTS"),
-        Triple(Icons.Default.Star, favorites.toString(), "FAVORITES"),
         Triple(Icons.Default.Cake, all.count { isBirthdayToday(it.dob) }.toString(), "TODAY"),
         Triple(Icons.Default.FilterAlt, showing.toString(), "SHOWING")
     )
@@ -469,9 +466,9 @@ fun SearchField(value: String, onChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(46.dp),
         singleLine = true,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = Navy,
             unfocusedBorderColor = Border,
@@ -479,7 +476,7 @@ fun SearchField(value: String, onChange: (String) -> Unit) {
             unfocusedLeadingIconColor = TextMuted,
             cursorColor = Navy
         ),
-        placeholder = { Text("Search name, mobile, office, email or ID...", color = TextMuted) },
+        placeholder = { Text("Search name, mobile, office, email or ID…", color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingIcon = { Icon(Icons.Default.Search, null) },
         trailingIcon = { if (value.isNotEmpty()) IconButton({ onChange("") }) { Icon(Icons.Default.Clear, "Clear") } }
     )
@@ -490,7 +487,7 @@ fun FilterButton(label: String, value: String, modifier: Modifier = Modifier, on
     val active = value != "All"
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.height(46.dp),
+        modifier = modifier.height(40.dp),
         shape = RoundedCornerShape(12.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, if (active) Navy else Border),
         colors = ButtonDefaults.outlinedButtonColors(
@@ -508,7 +505,7 @@ fun FilterButton(label: String, value: String, modifier: Modifier = Modifier, on
 }
 
 @Composable
-fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> Unit) {
+fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit) {
     val context = LocalContext.current
     Card(
         Modifier.fillMaxWidth().clickable { onOpen(o) },
@@ -524,9 +521,6 @@ fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Offic
                     Text(o.officerName, fontWeight = FontWeight.Bold, color = TextDark, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(2.dp))
                     Text(o.designation.ifBlank { "Designation not available" }, color = Navy, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                IconButton(onClick = { onFavorite(o) }, modifier = Modifier.size(38.dp)) {
-                    Icon(if (o.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, "Favorite", tint = if (o.isFavorite) Gold else Color(0xFF7A8494), modifier = Modifier.size(21.dp))
                 }
                 Icon(Icons.Default.ChevronRight, null, tint = TextMuted, modifier = Modifier.size(20.dp))
             }
@@ -557,8 +551,8 @@ fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Offic
 
 
 @Composable
-fun OfficerCard(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> Unit) {
-    CompactOfficerCard(o, onOpen, onFavorite)
+fun OfficerCard(o: Officer, onOpen: (Officer) -> Unit) {
+    CompactOfficerCard(o, onOpen)
 }
 
 @Composable
@@ -583,6 +577,40 @@ fun InitialAvatar(name: String) {
 }
 fun avatarColor(name: String): Color = listOf(Color(0xFF2979FF), Color(0xFF7E57C2), Color(0xFF00897B), Color(0xFFE91E63), Color(0xFFEF6C00))[name.hashCode().and(Int.MAX_VALUE) % 5]
 fun primaryDistrict(o: Officer): String = if (o.subLocation.isNotBlank()) o.district.split(",").last().trim() else o.district.split(",").last().trim()
+
+@Composable
+fun MoreScreen(onOffices: () -> Unit, onSettings: () -> Unit, onAbout: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Text("More", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
+        Text("Other directory and application options", color = TextMuted)
+        Spacer(Modifier.height(14.dp))
+        MoreOption(Icons.Default.Business, "Office Directory", "Browse staff by district and office", onOffices)
+        MoreOption(Icons.Default.Settings, "Settings", "Application preferences and data management", onSettings)
+        MoreOption(Icons.Default.Info, "About", "Application information and directory status", onAbout)
+    }
+}
+
+@Composable
+fun MoreOption(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(11.dp)).background(Navy.copy(.08f)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = Navy)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Bold, color = TextDark)
+                Text(subtitle, color = TextMuted, style = MaterialTheme.typography.bodySmall)
+            }
+            Icon(Icons.Default.ChevronRight, null, tint = TextMuted)
+        }
+    }
+}
 
 @Composable
 fun OfficesScreen(all: List<Officer>, onOpen: (String) -> Unit, onContact: (Officer) -> Unit) {
@@ -624,7 +652,7 @@ fun OfficeCard(district: String, staff: List<Officer>, onOpen: (String) -> Unit,
 }
 
 @Composable
-fun BirthdaysScreen(list: List<Officer>, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> Unit) {
+fun BirthdaysScreen(list: List<Officer>, onOpen: (Officer) -> Unit) {
     val today = list.filter { isBirthdayToday(it.dob) }.sortedBy { it.officerName.lowercase(Locale.getDefault()) }
     val upcoming = list.filter { it.dob.isNotBlank() && !isBirthdayToday(it.dob) }
         .sortedBy { daysUntilBirthday(it.dob) }
@@ -638,7 +666,7 @@ fun BirthdaysScreen(list: List<Officer>, onOpen: (Officer) -> Unit, onFavorite: 
                 Column(Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Cake, null, tint = Gold); Spacer(Modifier.width(8.dp)); Text("Today's Birthdays", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium) }
                     Spacer(Modifier.height(8.dp))
-                    today.forEach { BirthdayRow(it, onOpen, onFavorite) }
+                    today.forEach { BirthdayRow(it, onOpen) }
                 }
             }
         } else {
@@ -654,24 +682,13 @@ fun BirthdaysScreen(list: List<Officer>, onOpen: (Officer) -> Unit, onFavorite: 
 }
 
 @Composable
-fun BirthdayRow(o: Officer, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> Unit) {
+fun BirthdayRow(o: Officer, onOpen: (Officer) -> Unit) {
     Card(Modifier.fillMaxWidth().clickable { onOpen(o) }, shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
             InitialAvatar(o.officerName); Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) {
                 Text(o.officerName, fontWeight = FontWeight.Bold); Text(o.designation, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(formatDob(o.dob), color = Navy, style = MaterialTheme.typography.labelMedium)
-            }; IconButton({ onFavorite(o) }) { Icon(if (o.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, "Favorite", tint = if (o.isFavorite) Gold else Color.Gray) }
+            }
         }
-    }
-}
-
-@Composable
-fun FavoritesScreen(list: List<Officer>, onOpen: (Officer) -> Unit, onFavorite: (Officer) -> Unit) {
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Favorite Contacts", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
-        Text("Quick access to frequently contacted staff", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(12.dp))
-        if (list.isEmpty()) EmptyState("No favorites yet", "Tap the star on any staff member to add them here.")
-        else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) { items(list, key = { it.id }) { OfficerCard(it, onOpen, onFavorite) } }
     }
 }
 
@@ -1125,13 +1142,12 @@ fun normalizeContacts(value: String): String = value.replace("\n", " ").split(Re
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OfficerDetails(o: Officer, onDismiss: () -> Unit, onFavorite: () -> Unit) {
+fun OfficerDetails(o: Officer, onDismiss: () -> Unit) {
     val context = LocalContext.current; val clipboard = LocalClipboardManager.current
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 InitialAvatar(o.officerName); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(o.officerName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); Text(o.designation, color = Navy, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-                IconButton(onFavorite) { Icon(if (o.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, "Favorite", tint = if (o.isFavorite) Gold else Color.Gray) }
             }
             Spacer(Modifier.height(12.dp)); if (o.sectionCell.isNotBlank()) DetailRow(Icons.Default.Work, "Section / Cell: ${o.sectionCell}")
             if (o.employeeId.isNotBlank()) DetailRow(Icons.Default.Person, "Employee ID: ${o.employeeId}")
