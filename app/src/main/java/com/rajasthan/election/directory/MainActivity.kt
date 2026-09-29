@@ -283,10 +283,10 @@ fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenStaff: () -> Un
                 vm.setTab(AppTab.DIRECTORY)
             }
             HomeQuickCard(Icons.Default.Badge, "Designation", "Select Designation", Modifier.weight(1f)) {
-                vm.setTab(AppTab.STAFF)
+                vm.setTab(AppTab.DIRECTORY)
             }
             HomeQuickCard(Icons.Default.Work, "Section / Cell", "Select Section", Modifier.weight(1f)) {
-                vm.setTab(AppTab.STAFF)
+                vm.setTab(AppTab.DIRECTORY)
             }
         }
         Spacer(Modifier.height(12.dp))
