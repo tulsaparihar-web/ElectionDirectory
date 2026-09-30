@@ -1500,11 +1500,15 @@ fun OfficerDetails(o: Officer, onDismiss: () -> Unit) {
                 Text("Directions")
             }
             Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionButton("Call", Icons.Default.Call, Green, o.mobile() != null) { o.mobile()?.let { dial(context, it) } }
-                ActionButton("Email", Icons.Default.Email, Navy, o.email.isNotBlank()) { email(context, o.email) }
-                ActionButton("Share", Icons.Default.Share, Gold, true) { shareContact(context, o) }
-                ActionButton("Save", Icons.Default.PersonAdd, Color(0xFF596574), true) { saveContact(context, o) }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActionButton("Call", Icons.Default.Call, Green, o.mobile() != null) { o.mobile()?.let { dial(context, it) } }
+                    ActionButton("Email", Icons.Default.Email, Navy, o.email.isNotBlank()) { email(context, o.email) }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActionButton("Share", Icons.Default.Share, Gold, true) { shareContact(context, o) }
+                    ActionButton("Save Contact", Icons.Default.PersonAdd, Color(0xFF596574), true) { saveContact(context, o) }
+                }
             }
             if (o.mobile() != null) { Spacer(Modifier.height(8.dp)); OutlinedButton({ whatsapp(context, o.mobile()!!) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) { Icon(Icons.Default.Chat, null); Spacer(Modifier.width(7.dp)); Text("WhatsApp", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) } }
         }
@@ -1518,7 +1522,24 @@ fun ContactLine(label: String, value: String, icon: androidx.compose.ui.graphics
 
 @Composable
 fun RowScope.ActionButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color, enabled: Boolean, onClick: () -> Unit) {
-    FilledTonalButton(onClick, enabled = enabled, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(12.dp)) { Icon(icon, null, Modifier.size(18.dp)); Spacer(Modifier.width(3.dp)); Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) }
+    FilledTonalButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.weight(1f).height(52.dp),
+        shape = RoundedCornerShape(12.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp)
+    ) {
+        Icon(icon, null, Modifier.size(19.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip
+        )
+    }
 }
 
 @Composable
