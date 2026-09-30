@@ -32,6 +32,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -126,7 +128,7 @@ data class DirectoryUiState(
 class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
     suspend fun syncFromOfficialDirectory(): Int {
         val items = fetchOfficialDirectory()
-        if (items.isEmpty()) return 0
+        if (items.isEmpty()) throw IllegalStateException("The official directory returned no usable records.")
         repo.upsert(items)
         return items.size
     }
@@ -310,96 +312,100 @@ fun Header(onAbout: () -> Unit, onSettings: () -> Unit) {
 @Composable
 fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenStaff: () -> Unit, onOpenOfficer: (Officer) -> Unit) {
     val today = all.filter { isBirthdayToday(it.dob) }
-    val next = all.firstOrNull { it.dob.isNotBlank() }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Spacer(Modifier.height(14.dp))
-        Text("Find an officer", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
-        Text("Search the official Rajasthan Election Department directory", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(12.dp))
-
-        var homeQuery by remember { mutableStateOf("") }
-        SearchField(homeQuery, { q ->
-            homeQuery = q
-            vm.setQuery(q)
-            if (q.isNotBlank()) {
-                vm.setDistrict("All")
-                vm.setTab(AppTab.DIRECTORY)
-            }
-        })
-        Spacer(Modifier.height(12.dp))
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeStatCard(Icons.Default.Person, all.size.toString(), "Total Staff", Navy, Modifier.weight(1f))
-            HomeStatCard(Icons.Default.LocationOn, "41", "Districts", Green, Modifier.weight(1f))
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(top = 14.dp, bottom = 20.dp)
+    ) {
+        item {
+            Text("Find an officer", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
+            Spacer(Modifier.height(2.dp))
+            Text("Search the official Rajasthan Election Department directory", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
         }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeStatCard(Icons.Default.Badge, all.map { it.designation }.filter(String::isNotBlank).distinct().size.toString(), "Designations", Gold, Modifier.weight(1f))
-            HomeStatCard(Icons.Default.Work, all.map { it.sectionCell }.filter(String::isNotBlank).distinct().size.toString(), "Sections / Cells", Color(0xFF6F42C1), Modifier.weight(1f))
+        item {
+            var homeQuery by remember { mutableStateOf("") }
+            SearchField(homeQuery, { q ->
+                homeQuery = q
+                vm.setQuery(q)
+                if (q.isNotBlank()) {
+                    vm.setDistrict("All")
+                    vm.setTab(AppTab.DIRECTORY)
+                }
+            })
         }
-
-        Spacer(Modifier.height(14.dp))
-        Text("Quick access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextDark)
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HomeQuickCard(Icons.Default.People, "All Staff", "Browse directory", Modifier.weight(1f)) {
-                vm.setQuery("")
-                vm.setDistrict("All")
-                vm.setTab(AppTab.DIRECTORY)
-            }
-            HomeQuickCard(Icons.Default.Business, "Offices", "Browse locations", Modifier.weight(1f)) {
-                vm.setTab(AppTab.OFFICES)
-            }
-            HomeQuickCard(Icons.Default.Cake, "Birthdays", "Upcoming dates", Modifier.weight(1f)) {
-                vm.setTab(AppTab.BIRTHDAYS)
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HomeStatCard(Icons.Default.Person, all.size.toString(), "Total Staff", Navy, Modifier.weight(1f))
+                HomeStatCard(Icons.Default.LocationOn, "41", "Districts", Green, Modifier.weight(1f))
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = { vm.setDistrict("Jaipur"); vm.setQuery(""); onOpenStaff() },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Navy)
-        ) {
-            Icon(Icons.Default.Person, null)
-            Spacer(Modifier.width(7.dp))
-            Text("View CEO Office HQ Staff", fontWeight = FontWeight.Bold)
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HomeStatCard(Icons.Default.Badge, all.map { it.designation }.filter(String::isNotBlank).distinct().size.toString(), "Designations", Gold, Modifier.weight(1f))
+                HomeStatCard(Icons.Default.Work, all.map { it.sectionCell }.filter(String::isNotBlank).distinct().size.toString(), "Sections / Cells", Color(0xFF6F42C1), Modifier.weight(1f))
+            }
         }
-
-        Spacer(Modifier.height(14.dp))
-        if (today.isNotEmpty()) {
-            Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-                Column(Modifier.padding(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Cake, null, tint = Gold)
-                        Spacer(Modifier.width(7.dp))
-                        Text("Today's Birthdays", fontWeight = FontWeight.Bold, color = TextDark)
-                        Spacer(Modifier.weight(1f))
-                        Text(today.size.toString(), color = Navy, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    today.take(3).forEach { person ->
-                        Row(Modifier.fillMaxWidth().clickable { onOpenOfficer(person) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                            InitialAvatar(person.officerName)
-                            Spacer(Modifier.width(9.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(person.officerName, fontWeight = FontWeight.Bold, color = TextDark)
-                                Text(person.designation, color = TextMuted, style = MaterialTheme.typography.bodySmall)
+        item {
+            Text("Quick access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextDark)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HomeQuickCard(Icons.Default.People, "All Staff", "Browse directory", Modifier.weight(1f)) {
+                    vm.setQuery(""); vm.setDistrict("All"); vm.setTab(AppTab.DIRECTORY)
+                }
+                HomeQuickCard(Icons.Default.Business, "Offices", "Browse locations", Modifier.weight(1f)) {
+                    vm.setTab(AppTab.OFFICES)
+                }
+                HomeQuickCard(Icons.Default.Cake, "Birthdays", "Upcoming dates", Modifier.weight(1f)) {
+                    vm.setTab(AppTab.BIRTHDAYS)
+                }
+            }
+        }
+        item {
+            Button(
+                onClick = { vm.setDistrict("Jaipur"); vm.setQuery(""); onOpenStaff() },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Navy)
+            ) {
+                Icon(Icons.Default.Person, null)
+                Spacer(Modifier.width(7.dp))
+                Text("View CEO Office HQ Staff", fontWeight = FontWeight.Bold)
+            }
+        }
+        item {
+            if (today.isNotEmpty()) {
+                Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
+                    Column(Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Cake, null, tint = Gold)
+                            Spacer(Modifier.width(7.dp))
+                            Text("Today's Birthdays", fontWeight = FontWeight.Bold, color = TextDark)
+                            Spacer(Modifier.weight(1f))
+                            Text(today.size.toString(), color = Navy, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        today.take(3).forEach { person ->
+                            Row(Modifier.fillMaxWidth().clickable { onOpenOfficer(person) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                InitialAvatar(person.officerName)
+                                Spacer(Modifier.width(9.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(person.officerName, fontWeight = FontWeight.Bold, color = TextDark)
+                                    Text(person.designation, color = TextMuted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                Icon(Icons.Default.ChevronRight, null, tint = TextMuted)
                             }
-                            Icon(Icons.Default.ChevronRight, null, tint = TextMuted)
                         }
                     }
                 }
-            }
-        } else {
-            Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Cake, null, tint = Gold)
-                    Spacer(Modifier.width(9.dp))
-                    Column {
-                        Text("Birthdays", fontWeight = FontWeight.Bold, color = TextDark)
-                        Text("No birthday today", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+            } else {
+                Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Cake, null, tint = Gold)
+                        Spacer(Modifier.width(9.dp))
+                        Column {
+                            Text("Birthdays", fontWeight = FontWeight.Bold, color = TextDark)
+                            Text("No birthday today", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
@@ -451,7 +457,7 @@ fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>,
                 Row(Modifier.padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(7.dp).clip(CircleShape).background(Green))
                     Spacer(Modifier.width(5.dp))
-                    Text("OFFLINE", color = Green, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                    Text("OFFLINE READY", color = Green, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
@@ -553,11 +559,11 @@ fun StatItem(icon: androidx.compose.ui.graphics.vector.ImageVector, value: Strin
 
 @Composable
 fun SearchField(value: String, onChange: (String) -> Unit) {
-    // Custom search box avoids the large vertical content padding introduced by
-    // Material OutlinedTextField when a floating label is present. The typed
-    // text is centered in the field and remains clearly visible above the IME.
     Surface(
-        modifier = Modifier.fillMaxWidth().height(54.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp)
+            .semantics { contentDescription = "Search directory. Enter name, mobile, office, email or employee ID." },
         color = SurfaceWhite,
         shape = RoundedCornerShape(14.dp),
         border = androidx.compose.foundation.BorderStroke(2.dp, if (value.isNotBlank()) Navy else Border)
@@ -566,25 +572,11 @@ fun SearchField(value: String, onChange: (String) -> Unit) {
             modifier = Modifier.fillMaxSize().padding(start = 12.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Default.Search,
-                contentDescription = "Search directory",
-                tint = if (value.isNotBlank()) Navy else TextMuted,
-                modifier = Modifier.size(25.dp)
-            )
+            Icon(Icons.Default.Search, contentDescription = null, tint = if (value.isNotBlank()) Navy else TextMuted, modifier = Modifier.size(25.dp))
             Spacer(Modifier.width(9.dp))
-            Box(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                contentAlignment = Alignment.CenterStart
-            ) {
+            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
                 if (value.isBlank()) {
-                    Text(
-                        "Search directory",
-                        color = TextMuted,
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Text("Search directory", color = TextMuted, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 androidx.compose.foundation.text.BasicTextField(
                     value = value,
@@ -596,16 +588,8 @@ fun SearchField(value: String, onChange: (String) -> Unit) {
                 )
             }
             if (value.isNotEmpty()) {
-                IconButton(
-                    onClick = { onChange("") },
-                    modifier = Modifier.size(46.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Clear,
-                        contentDescription = "Clear search",
-                        tint = TextMuted,
-                        modifier = Modifier.size(25.dp)
-                    )
+                IconButton(onClick = { onChange("") }, modifier = Modifier.size(46.dp)) {
+                    Icon(Icons.Default.Clear, contentDescription = "Clear search", tint = TextMuted, modifier = Modifier.size(25.dp))
                 }
             }
         }
@@ -927,7 +911,7 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = { if (!syncing) onDismiss() }) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)
                 .padding(bottom = 24.dp)
@@ -1178,7 +1162,17 @@ fun SettingsSheet(
                 Icon(Icons.Default.Code, null); Spacer(Modifier.width(7.dp)); Text("Import Directory JSON")
             }
             Spacer(Modifier.height(7.dp))
-            Text("Import replaces the current local directory. The first worksheet is matched by header names. Optional fields supported: Section / Cell, Employee ID, DOB, Email and Remark.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Sync updates/adds records from the official online directory. No login is required. Your local data remains available when offline.",
+                color = Color.Gray,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(Modifier.height(7.dp))
+            Text(
+                "Manual Excel/JSON import replaces the current local directory and remains administrator-only.",
+                color = Color.Gray,
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 
@@ -1296,7 +1290,7 @@ fun readSeniorityOrder(o: org.json.JSONObject): Int {
 }
 
 suspend fun fetchOfficialDirectory(): List<Officer> = withContext(Dispatchers.IO) {
-    val connection = (URL(DIRECTORY_SYNC_URL).openConnection() as HttpURLConnection).apply {
+    val connection = (URL(DIRECTORY_SYNC_URL + "?ts=" + System.currentTimeMillis()).openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"
         connectTimeout = 15000
         readTimeout = 20000
