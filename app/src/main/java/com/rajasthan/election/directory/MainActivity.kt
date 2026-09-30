@@ -518,24 +518,63 @@ fun StatItem(icon: androidx.compose.ui.graphics.vector.ImageVector, value: Strin
 
 @Composable
 fun SearchField(value: String, onChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        modifier = Modifier.fillMaxWidth().height(56.dp),
-        singleLine = true,
-        shape = RoundedCornerShape(12.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Navy,
-            unfocusedBorderColor = Border,
-            focusedLeadingIconColor = Navy,
-            unfocusedLeadingIconColor = TextMuted,
-            cursorColor = Navy
-        ),
-        label = { Text("Search directory") },
-        placeholder = { Text("Name, mobile, office, email or ID…", color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        leadingIcon = { Icon(Icons.Default.Search, null) },
-        trailingIcon = { if (value.isNotEmpty()) IconButton({ onChange("") }) { Icon(Icons.Default.Clear, "Clear") } }
-    )
+    // Custom search box avoids the large vertical content padding introduced by
+    // Material OutlinedTextField when a floating label is present. The typed
+    // text is centered in the field and remains clearly visible above the IME.
+    Surface(
+        modifier = Modifier.fillMaxWidth().height(54.dp),
+        color = SurfaceWhite,
+        shape = RoundedCornerShape(14.dp),
+        border = androidx.compose.foundation.BorderStroke(2.dp, if (value.isNotBlank()) Navy else Border)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(start = 12.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Search,
+                contentDescription = "Search directory",
+                tint = if (value.isNotBlank()) Navy else TextMuted,
+                modifier = Modifier.size(25.dp)
+            )
+            Spacer(Modifier.width(9.dp))
+            Box(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (value.isBlank()) {
+                    Text(
+                        "Search directory",
+                        color = TextMuted,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                androidx.compose.foundation.text.BasicTextField(
+                    value = value,
+                    onValueChange = onChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = TextDark),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Navy)
+                )
+            }
+            if (value.isNotEmpty()) {
+                IconButton(
+                    onClick = { onChange("") },
+                    modifier = Modifier.size(46.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Clear,
+                        contentDescription = "Clear search",
+                        tint = TextMuted,
+                        modifier = Modifier.size(25.dp)
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
