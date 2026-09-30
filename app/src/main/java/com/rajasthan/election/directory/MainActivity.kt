@@ -6,6 +6,10 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.widget.Toast
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import java.util.zip.ZipInputStream
@@ -59,7 +63,8 @@ data class Officer(
     val contactNumbers: String = "",
     val email: String = "",
     val remark: String = "",
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val seniorityOrder: Int = DEFAULT_SENIORITY_ORDER
 ) {
     fun phones(): List<String> = contactNumbers.split("|").map { it.trim() }.filter { it.isNotBlank() }
     fun mobile(): String? = phones().firstOrNull { it.filter(Char::isDigit).length >= 10 }
@@ -74,13 +79,15 @@ interface OfficerDao {
     fun observeAll(): Flow<List<Officer>>
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<Officer>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(items: List<Officer>)
     @Query("DELETE FROM officers")
     suspend fun deleteAll()
     @Query("UPDATE officers SET isFavorite = :favorite WHERE id = :id")
     suspend fun setFavorite(id: Int, favorite: Boolean)
 }
 
-@Database(entities = [Officer::class], version = 2, exportSchema = false)
+@Database(entities = [Officer::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() { abstract fun officerDao(): OfficerDao }
 
 val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -91,10 +98,17 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE officers ADD COLUMN seniorityOrder INTEGER NOT NULL DEFAULT $DEFAULT_SENIORITY_ORDER")
+    }
+}
+
 class OfficerRepository(private val dao: OfficerDao) {
     val officers = dao.observeAll()
     suspend fun setFavorite(id: Int, favorite: Boolean) = dao.setFavorite(id, favorite)
     suspend fun replace(items: List<Officer>) { dao.deleteAll(); dao.insertAll(items) }
+    suspend fun upsert(items: List<Officer>) { dao.upsertAll(items) }
 }
 
 enum class AppTab(val label: String) { HOME("Home"), DIRECTORY("Directory"), OFFICES("Offices"), BIRTHDAYS("Birthdays"), MORE("More") }
@@ -110,6 +124,12 @@ data class DirectoryUiState(
 )
 
 class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
+    suspend fun syncFromOfficialDirectory(): Int {
+        val items = fetchOfficialDirectory()
+        if (items.isEmpty()) return 0
+        repo.upsert(items)
+        return items.size
+    }
     val officers = repo.officers.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val _state = MutableStateFlow(DirectoryUiState())
     val state = _state.asStateFlow()
@@ -162,6 +182,9 @@ private val Border = Color(0xFFD9E0EA)
 private val TextDark = Color(0xFF182235)
 private val TextMuted = Color(0xFF667085)
 
+private const val DEFAULT_SENIORITY_ORDER = 999999
+private const val DIRECTORY_SYNC_URL = "https://election.rajasthan.gov.in/ED_Directory_Web/data/directory.json"
+
 fun isCeoHqStaff(o: Officer): Boolean = o.dob.isNotBlank()
 
 // CEO HQ seniority order supplied for the directory.
@@ -182,10 +205,16 @@ fun ceoHqSeniorityRank(o: Officer): Int {
     }
 }
 
-fun sortCeoHqBySeniority(list: List<Officer>): List<Officer> = list.sortedWith(
-    compareBy<Officer>({ if (isCeoHqStaff(it)) 0 else 1 }, { ceoHqSeniorityRank(it) },
-        { it.designation.lowercase(Locale.getDefault()) }, { it.officerName.lowercase(Locale.getDefault()) })
+fun sortBySeniorityOrder(list: List<Officer>): List<Officer> = list.sortedWith(
+    compareBy<Officer>(
+        { it.seniorityOrder },
+        { if (it.seniorityOrder == DEFAULT_SENIORITY_ORDER) ceoHqSeniorityRank(it) else 0 },
+        { it.designation.lowercase(Locale.getDefault()) },
+        { it.officerName.lowercase(Locale.getDefault()) }
+    )
 )
+
+fun sortCeoHqBySeniority(list: List<Officer>): List<Officer> = sortBySeniorityOrder(list)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -242,7 +271,13 @@ fun ElectionDirectoryApp() {
     selected?.let { OfficerDetails(it, onDismiss = { selected = null }) }
     if (showFilters) FilterSheet(vm, all, onDismiss = { showFilters = false })
     if (showAbout) AboutSheet(all.size, onDismiss = { showAbout = false })
-    if (showSettings) SettingsSheet(state.darkMode, onDarkMode = vm::setDarkMode, onImport = { items -> vm.replaceData(items) }, onDismiss = { showSettings = false })
+    if (showSettings) SettingsSheet(
+        darkMode = state.darkMode,
+        onDarkMode = vm::setDarkMode,
+        onImport = { items -> vm.replaceData(items) },
+        onSync = { vm.syncFromOfficialDirectory() },
+        onDismiss = { showSettings = false }
+    )
 }
 
 @Composable
@@ -402,7 +437,7 @@ fun HomeQuickCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: 
 
 @Composable
 fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>, state: DirectoryUiState, onOpen: (Officer) -> Unit, onFilter: () -> Unit) {
-    val displayList = if (state.district.equals("Jaipur", true)) sortCeoHqBySeniority(list) else list
+    val displayList = sortBySeniorityOrder(list)
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -1037,11 +1072,20 @@ fun FilterSelector(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsSheet(darkMode: Boolean, onDarkMode: (Boolean) -> Unit, onImport: (List<Officer>) -> Unit, onDismiss: () -> Unit) {
+fun SettingsSheet(
+    darkMode: Boolean,
+    onDarkMode: (Boolean) -> Unit,
+    onImport: (List<Officer>) -> Unit,
+    onSync: suspend () -> Int,
+    onDismiss: () -> Unit
+) {
     val context = LocalContext.current
     var showAdminLogin by remember { mutableStateOf(false) }
     var adminAuthenticated by remember { mutableStateOf(false) }
     var pendingImportType by remember { mutableStateOf("") }
+    var syncing by remember { mutableStateOf(false) }
+    var syncMessage by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
     fun startImport(type: String) {
         pendingImportType = type
@@ -1090,6 +1134,42 @@ fun SettingsSheet(darkMode: Boolean, onDarkMode: (Boolean) -> Unit, onImport: (L
                 }
             }
             Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    if (syncing) return@Button
+                    syncing = true
+                    syncMessage = ""
+                    scope.launch {
+                        runCatching { onSync() }
+                            .onSuccess { count ->
+                                syncMessage = if (count > 0) "Synced " + count + " records from the official directory." else "No records were received."
+                                toast(context, syncMessage)
+                            }
+                            .onFailure {
+                                syncMessage = "Sync failed. Could not reach the official directory."
+                                toast(context, syncMessage)
+                            }
+                        syncing = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(13.dp),
+                enabled = !syncing,
+                colors = ButtonDefaults.buttonColors(containerColor = Navy)
+            ) {
+                if (syncing) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                } else {
+                    Icon(Icons.Default.Sync, null)
+                }
+                Spacer(Modifier.width(7.dp))
+                Text(if (syncing) "Syncing…" else "Sync")
+            }
+            if (syncMessage.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(syncMessage, color = if (syncMessage.startsWith("Sync failed")) MaterialTheme.colorScheme.error else Green, style = MaterialTheme.typography.bodySmall)
+            }
+            Spacer(Modifier.height(10.dp))
             OutlinedButton({ startImport("excel") }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) {
                 Icon(Icons.Default.Upload, null); Spacer(Modifier.width(7.dp)); Text("Import Directory Excel")
             }
@@ -1184,9 +1264,95 @@ fun parseJson(context: Context, uri: Uri): List<Officer> {
             var district = rawDistrict; var sub = o.optString("subLocation").trim()
             if (district.contains(",") && sub.isBlank()) { val parts = district.split(",").map { it.trim() }.filter { it.isNotBlank() }; if (parts.size >= 2) { sub = parts.dropLast(1).joinToString(", "); district = parts.last() } }
             val contacts = o.optJSONArray("contactNumbers")?.let { a -> (0 until a.length()).map { a.optString(it) }.filter(String::isNotBlank).joinToString("|") } ?: normalizeContacts(o.optString("contactNumbers", o.optString("contactNo")))
-            add(Officer(o.optInt("id", i + 1), name, o.optString("designation"), o.optString("officeDepartment", "ELECTION DEPARTMENT").ifBlank { "ELECTION DEPARTMENT" }, district, sub, o.optString("sectionCell", o.optString("section")), o.optString("employeeId", o.optString("employeeID")), o.optString("dob"), contacts, o.optString("email"), o.optString("remark"), o.optBoolean("isFavorite", false)))
+            add(
+                Officer(
+                    id = o.optInt("id", i + 1),
+                    officerName = name,
+                    designation = o.optString("designation"),
+                    officeDepartment = o.optString("officeDepartment", "ELECTION DEPARTMENT").ifBlank { "ELECTION DEPARTMENT" },
+                    district = district,
+                    subLocation = sub,
+                    sectionCell = o.optString("sectionCell", o.optString("section")),
+                    employeeId = o.optString("employeeId", o.optString("employeeID")),
+                    dob = o.optString("dob"),
+                    contactNumbers = contacts,
+                    email = o.optString("email"),
+                    remark = o.optString("remark"),
+                    isFavorite = o.optBoolean("isFavorite", false),
+                    seniorityOrder = readSeniorityOrder(o)
+                )
+            )
         }
     }
+}
+
+fun readSeniorityOrder(o: org.json.JSONObject): Int {
+    val raw = o.opt("seniorityOrder")
+    return when (raw) {
+        is Number -> raw.toInt()
+        is String -> raw.trim().toIntOrNull() ?: DEFAULT_SENIORITY_ORDER
+        else -> DEFAULT_SENIORITY_ORDER
+    }
+}
+
+suspend fun fetchOfficialDirectory(): List<Officer> = withContext(Dispatchers.IO) {
+    val connection = (URL(DIRECTORY_SYNC_URL).openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"
+        connectTimeout = 15000
+        readTimeout = 20000
+        useCaches = false
+        setRequestProperty("Accept", "application/json")
+        setRequestProperty("Cache-Control", "no-cache")
+    }
+    try {
+        val code = connection.responseCode
+        if (code !in 200..299) throw IllegalStateException("Server returned HTTP " + code)
+        val text = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        parseOfficialDirectoryJson(text)
+    } finally {
+        connection.disconnect()
+    }
+}
+
+fun parseOfficialDirectoryJson(text: String): List<Officer> {
+    val arr = JSONArray(text)
+    return buildList {
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val name = o.optString("officerName", o.optString("name")).trim()
+            if (name.isBlank()) continue
+            val rawDistrict = o.optString("district").trim()
+            var district = rawDistrict
+            var sub = o.optString("subLocation").trim()
+            if (district.contains(",") && sub.isBlank()) {
+                val parts = district.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                if (parts.size >= 2) {
+                    sub = parts.dropLast(1).joinToString(", ")
+                    district = parts.last()
+                }
+            }
+            val contacts = o.optJSONArray("contactNumbers")?.let { a ->
+                (0 until a.length()).map { a.optString(it) }.filter(String::isNotBlank).joinToString("|")
+            } ?: normalizeContacts(o.optString("contactNumbers", o.optString("contactNo")))
+            add(
+                Officer(
+                    id = o.optInt("id", i + 1),
+                    officerName = name,
+                    designation = o.optString("designation"),
+                    officeDepartment = o.optString("officeDepartment", "ELECTION DEPARTMENT").ifBlank { "ELECTION DEPARTMENT" },
+                    district = district,
+                    subLocation = sub,
+                    sectionCell = o.optString("sectionCell", o.optString("section")),
+                    employeeId = o.optString("employeeId", o.optString("employeeID")),
+                    dob = o.optString("dob"),
+                    contactNumbers = contacts,
+                    email = o.optString("email"),
+                    remark = o.optString("remark"),
+                    seniorityOrder = readSeniorityOrder(o)
+                )
+            )
+        }
+    }.sortedWith(compareBy<Officer>({ it.seniorityOrder }, { it.officerName.lowercase(Locale.getDefault()) }))
 }
 
 fun parseXlsx(context: Context, uri: Uri): List<Officer> {
@@ -1384,7 +1550,7 @@ fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.
 @Composable
 fun rememberDirectoryViewModel(): DirectoryViewModel {
     val context = LocalContext.current
-    val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "election_directory.db").addMigrations(MIGRATION_1_2).build() }
+    val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "election_directory.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3).build() }
     val repo = remember { OfficerRepository(db.officerDao()) }
     val vm = remember { DirectoryViewModel(repo) }
     LaunchedEffect(Unit) {
@@ -1398,7 +1564,23 @@ suspend fun seedDatabase(context: Context, repo: OfficerRepository) {
     val seed = buildList {
         for (i in 0 until arr.length()) {
             val x = arr.getJSONObject(i); val nums = x.getJSONArray("contactNumbers")
-            add(Officer(x.getInt("id"), x.getString("officerName"), x.getString("designation"), x.getString("officeDepartment"), x.getString("district"), x.optString("subLocation"), x.optString("sectionCell"), x.optString("employeeId"), x.optString("dob"), buildList { for (j in 0 until nums.length()) add(nums.getString(j)) }.joinToString("|"), x.optString("email"), x.optString("remark")))
+            add(
+                Officer(
+                    id = x.getInt("id"),
+                    officerName = x.getString("officerName"),
+                    designation = x.getString("designation"),
+                    officeDepartment = x.getString("officeDepartment"),
+                    district = x.getString("district"),
+                    subLocation = x.optString("subLocation"),
+                    sectionCell = x.optString("sectionCell"),
+                    employeeId = x.optString("employeeId"),
+                    dob = x.optString("dob"),
+                    contactNumbers = buildList { for (j in 0 until nums.length()) add(nums.getString(j)) }.joinToString("|"),
+                    email = x.optString("email"),
+                    remark = x.optString("remark"),
+                    seniorityOrder = readSeniorityOrder(x)
+                )
+            )
         }
     }
     repo.replace(seed)
