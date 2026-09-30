@@ -911,7 +911,7 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
         }
     }
 
-    ModalBottomSheet(onDismissRequest = { if (!syncing) onDismiss() }) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)
                 .padding(bottom = 24.dp)
