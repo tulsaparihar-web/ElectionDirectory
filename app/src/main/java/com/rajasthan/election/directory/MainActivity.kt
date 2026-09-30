@@ -190,27 +190,71 @@ private const val DIRECTORY_SYNC_URL = "https://election.rajasthan.gov.in/ED_Dir
 fun isCeoHqStaff(o: Officer): Boolean = o.dob.isNotBlank()
 
 // CEO HQ seniority order supplied for the directory.
-fun ceoHqSeniorityRank(o: Officer): Int {
-    val d = o.designation.trim().uppercase(Locale.getDefault())
+fun normalizedPersonName(value: String): String =
+    value.trim().uppercase(Locale.getDefault())
         .replace(Regex("[^A-Z0-9 ]"), " ")
         .replace(Regex("\\s+"), " ").trim()
+
+fun ceoHqSeniorityRank(o: Officer): Int {
+    val d = normalizedPersonName(o.designation)
+    val n = normalizedPersonName(o.officerName)
+
+    // Fallback for the bundled directory. Older bundled records do not contain
+    // seniorityOrder, so use the current CEO Office organization as the
+    // authoritative role mapping when the value is not available.
     return when {
-        d == "CEO" || d == "CHIEF ELECTORAL OFFICER" -> 0
-        d == "OSD" || d.contains("OFFICER ON SPECIAL DUTY") -> 1
-        d.contains("JOINT CEO IT") || d.contains("JOINT CHIEF ELECTORAL OFFICER IT") -> 2
-        d.contains("JOINT CEO") || d.contains("JOINT CHIEF ELECTORAL OFFICER") -> 3
-        d == "FA" || d.contains("FINANCIAL ADVISER") || d.contains("FINANCIAL ADVISOR") -> 4
-        d.contains("ACEO") || d.contains("ADDITIONAL CHIEF ELECTORAL OFFICER") -> 5
-        d.contains("DY CEO IT") || d.contains("DEPUTY CEO IT") || d.contains("DEPUTY CHIEF ELECTORAL OFFICER IT") -> 7
-        d.contains("DY CEO") || d.contains("DEPUTY CEO") || d.contains("DEPUTY CHIEF ELECTORAL OFFICER") -> 6
+        n == "NAVEEN MAHAJAN" ||
+            d == "CEO" ||
+            d == "CHIEF ELECTORAL OFFICER" -> 0
+
+        n == "SURESH CHANDRA" ||
+            n == "RENU POONIA" ||
+            d == "OSD" ||
+            d.contains("OFFICER ON SPECIAL DUTY") -> 1
+
+        n == "MUKUL MOHAN TIWARI" ||
+            n == "M M TIWARI" ||
+            n == "MM TIWARI" ||
+            d.contains("JOINT CEO IT") ||
+            d.contains("JOINT CHIEF ELECTORAL OFFICER IT") -> 2
+
+        n == "RAUNAQUE BAIRAGI" ||
+            d.contains("JOINT CEO") ||
+            d.contains("JOINT CHIEF ELECTORAL OFFICER") -> 3
+
+        n == "MAHAVEER PRASAD MEENA" ||
+            n == "MAHAVEER MEENA" ||
+            d == "FA" ||
+            d.contains("FINANCIAL ADVISER") ||
+            d.contains("FINANCIAL ADVISOR") -> 4
+
+        d.contains("ACEO") ||
+            d.contains("ADDITIONAL CHIEF ELECTORAL OFFICER") -> 5
+
+        n == "SOMDATT DIXIT" ||
+            d.contains("DY CEO") ||
+            d.contains("DEPUTY CEO") ||
+            d.contains("DEPUTY CHIEF ELECTORAL OFFICER") -> 6
+
+        n == "PUNEET MEERWAL" ||
+            d.contains("DY CEO IT") ||
+            d.contains("DEPUTY CEO IT") ||
+            d.contains("DEPUTY CHIEF ELECTORAL OFFICER IT") -> 7
+
         else -> 8
     }
 }
 
 fun sortBySeniorityOrder(list: List<Officer>): List<Officer> = list.sortedWith(
     compareBy<Officer>(
-        { it.seniorityOrder },
-        { if (it.seniorityOrder == DEFAULT_SENIORITY_ORDER) ceoHqSeniorityRank(it) else 0 },
+        // CEO HQ staff (DOB present) always come before ordinary staff.
+        { if (isCeoHqStaff(it)) 0 else 1 },
+        // Requested CEO HQ hierarchy is applied before alphabetical/designation
+        // ordering, even when the bundled/live record has no usable order value.
+        { if (isCeoHqStaff(it)) ceoHqSeniorityRank(it) else 0 },
+        // Preserve explicit seniorityOrder for records that are not covered by
+        // the CEO HQ role hierarchy.
+        { if (it.seniorityOrder == DEFAULT_SENIORITY_ORDER) DEFAULT_SENIORITY_ORDER else it.seniorityOrder },
         { it.designation.lowercase(Locale.getDefault()) },
         { it.officerName.lowercase(Locale.getDefault()) }
     )
