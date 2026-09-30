@@ -121,7 +121,7 @@ data class DirectoryUiState(
     val district: String = "Jaipur",
     val designation: String = "All",
     val sectionCell: String = "All",
-    val tab: AppTab = AppTab.DIRECTORY,
+    val tab: AppTab = AppTab.HOME,
     val darkMode: Boolean = false
 )
 
