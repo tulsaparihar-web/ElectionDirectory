@@ -361,18 +361,6 @@ fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenStaff: () -> Un
             }
         }
         item {
-            Button(
-                onClick = { vm.setDistrict("Jaipur"); vm.setQuery(""); onOpenStaff() },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Navy)
-            ) {
-                Icon(Icons.Default.Person, null)
-                Spacer(Modifier.width(7.dp))
-                Text("View CEO Office HQ Staff", fontWeight = FontWeight.Bold)
-            }
-        }
-        item {
             if (today.isNotEmpty()) {
                 Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
                     Column(Modifier.padding(14.dp)) {
