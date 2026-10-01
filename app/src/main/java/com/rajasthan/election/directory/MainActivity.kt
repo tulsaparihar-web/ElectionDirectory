@@ -3,6 +3,8 @@ package com.rajasthan.election.directory
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.graphics.BitmapFactory
+import android.util.Base64
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.widget.Toast
@@ -10,10 +12,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import java.util.zip.ZipInputStream
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -30,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -49,7 +51,6 @@ import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.security.MessageDigest
 
 @Entity(tableName = "officers")
 data class Officer(
@@ -129,7 +130,7 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
     suspend fun syncFromOfficialDirectory(): Int {
         val items = fetchOfficialDirectory()
         if (items.isEmpty()) throw IllegalStateException("The official directory returned no usable records.")
-        repo.upsert(items)
+        repo.replace(items)
         return items.size
     }
     val officers = repo.officers.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -186,6 +187,17 @@ private val TextMuted = Color(0xFF667085)
 
 private const val DEFAULT_SENIORITY_ORDER = 999999
 private const val DIRECTORY_SYNC_URL = "https://election.rajasthan.gov.in/ED_Directory_Web/data/directory.json"
+
+private const val ELECTION_LOGO_WEBP_BASE64 = "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"
+
+@Composable
+fun ElectionLogo(modifier: Modifier = Modifier) {
+    val image = remember {
+        val bytes = Base64.decode(ELECTION_LOGO_WEBP_BASE64, Base64.DEFAULT)
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap()
+    }
+    Image(bitmap = image, contentDescription = "Election Commission of India", modifier = modifier)
+}
 
 fun isCeoHqStaff(o: Officer): Boolean = o.dob.isNotBlank()
 
@@ -280,6 +292,10 @@ fun ElectionDirectoryApp() {
     var showAbout by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
 
+    BackHandler(enabled = state.tab != AppTab.HOME && selected == null && !showFilters && !showAbout && !showSettings) {
+        vm.setTab(AppTab.HOME)
+    }
+
     val scheme = if (state.darkMode) darkColorScheme(primary = Color(0xFF9FAFFF), secondary = Color(0xFFFFB74D), background = Color(0xFF101318)) else lightColorScheme(primary = Navy, secondary = Gold, background = Background)
     MaterialTheme(colorScheme = scheme) {
         Scaffold(
@@ -300,7 +316,7 @@ fun ElectionDirectoryApp() {
             Column(Modifier.fillMaxSize().padding(padding)) {
                 Header(onAbout = { showAbout = true }, onSettings = { showSettings = true })
                 when (state.tab) {
-                    AppTab.HOME -> HomeScreen(vm, all, onOpenStaff = { vm.setTab(AppTab.DIRECTORY) }, onOpenOfficer = { selected = it })
+                    AppTab.HOME -> HomeScreen(vm, all, onOpenOfficer = { selected = it })
                     AppTab.DIRECTORY -> StaffScreen(vm, all, filtered, state, onOpen = { selected = it }, onFilter = { showFilters = true })
                     AppTab.OFFICES -> OfficesScreen(all, onOpen = { vm.setTab(AppTab.DIRECTORY); vm.setDistrict(it) }, onContact = { selected = it })
                     AppTab.BIRTHDAYS -> BirthdaysScreen(all, onOpen = { selected = it })
@@ -320,7 +336,6 @@ fun ElectionDirectoryApp() {
     if (showSettings) SettingsSheet(
         darkMode = state.darkMode,
         onDarkMode = vm::setDarkMode,
-        onImport = { items -> vm.replaceData(items) },
         onSync = { vm.syncFromOfficialDirectory() },
         onDismiss = { showSettings = false }
     )
@@ -331,11 +346,19 @@ fun Header(onAbout: () -> Unit, onSettings: () -> Unit) {
     Surface(color = Navy, shadowElevation = 4.dp) {
         Column {
             Box(Modifier.fillMaxWidth().height(4.dp).background(Gold))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(52.dp).clip(CircleShape).background(Color.White.copy(.12f)).clickable { onAbout() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.AccountBalance, "Rajasthan Government", tint = Gold, modifier = Modifier.size(29.dp))
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier.size(54.dp).clip(RoundedCornerShape(14.dp))
+                        .background(Color.White)
+                        .clickable { onAbout() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    ElectionLogo(Modifier.fillMaxSize().padding(2.dp))
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(11.dp))
                 Column(Modifier.weight(1f)) {
                     Text("RAJASTHAN GOVERNMENT", color = Gold, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                     Text("Election Department Directory", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
@@ -354,68 +377,127 @@ fun Header(onAbout: () -> Unit, onSettings: () -> Unit) {
 }
 
 @Composable
-fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenStaff: () -> Unit, onOpenOfficer: (Officer) -> Unit) {
+fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Officer) -> Unit) {
     val today = all.filter { isBirthdayToday(it.dob) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(top = 14.dp, bottom = 20.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(top = 14.dp, bottom = 24.dp)
     ) {
         item {
-            Text("Find an officer", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
-            Spacer(Modifier.height(2.dp))
-            Text("Search the official Rajasthan Election Department directory", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
-        }
-        item {
-            var homeQuery by remember { mutableStateOf("") }
-            SearchField(homeQuery, { q ->
-                homeQuery = q
-                vm.setQuery(q)
-                if (q.isNotBlank()) {
-                    vm.setDistrict("All")
-                    vm.setTab(AppTab.DIRECTORY)
-                }
-            })
-        }
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HomeStatCard(Icons.Default.Person, all.size.toString(), "Total Staff", Navy, Modifier.weight(1f))
-                HomeStatCard(Icons.Default.LocationOn, "41", "Districts", Green, Modifier.weight(1f))
-            }
-        }
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HomeStatCard(Icons.Default.Badge, all.map { it.designation }.filter(String::isNotBlank).distinct().size.toString(), "Designations", Gold, Modifier.weight(1f))
-                HomeStatCard(Icons.Default.Work, all.map { it.sectionCell }.filter(String::isNotBlank).distinct().size.toString(), "Sections / Cells", Color(0xFF6F42C1), Modifier.weight(1f))
-            }
-        }
-        item {
-            Text("Quick access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextDark)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HomeQuickCard(Icons.Default.People, "All Staff", "Browse directory", Modifier.weight(1f)) {
-                    vm.setQuery(""); vm.setDistrict("All"); vm.setTab(AppTab.DIRECTORY)
-                }
-                HomeQuickCard(Icons.Default.Business, "Offices", "Browse locations", Modifier.weight(1f)) {
-                    vm.setTab(AppTab.OFFICES)
-                }
-                HomeQuickCard(Icons.Default.Cake, "Birthdays", "Upcoming dates", Modifier.weight(1f)) {
-                    vm.setTab(AppTab.BIRTHDAYS)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Navy,
+                shape = RoundedCornerShape(22.dp),
+                shadowElevation = 2.dp
+            ) {
+                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(78.dp).clip(RoundedCornerShape(18.dp)).background(Color.White),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ElectionLogo(Modifier.fillMaxSize().padding(3.dp))
+                    }
+                    Spacer(Modifier.width(15.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Official Directory", color = Gold, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Text("Election Department", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("Rajasthan Government", color = Color.White.copy(.78f), style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(8.dp))
+                        Surface(color = Color.White.copy(.10f), shape = RoundedCornerShape(10.dp)) {
+                            Text("$" + "{all.size} contacts currently available", color = Color.White, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
+                        }
+                    }
                 }
             }
         }
+
         item {
-            if (today.isNotEmpty()) {
-                Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-                    Column(Modifier.padding(14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Cake, null, tint = Gold)
-                            Spacer(Modifier.width(7.dp))
-                            Text("Today's Birthdays", fontWeight = FontWeight.Bold, color = TextDark)
-                            Spacer(Modifier.weight(1f))
+            Text("Quick access", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextDark)
+            Spacer(Modifier.height(7.dp))
+            HomeActionRow(Icons.Default.People, "Staff Directory", "Search staff by name, mobile, office, designation or Employee ID") {
+                vm.setQuery("")
+                vm.setDistrict("All")
+                vm.setDesignation("All")
+                vm.setSectionCell("All")
+                vm.setTab(AppTab.DIRECTORY)
+            }
+            Spacer(Modifier.height(8.dp))
+            HomeActionRow(Icons.Default.Business, "Office Directory", "Browse offices and staff by district") {
+                vm.setTab(AppTab.OFFICES)
+            }
+            Spacer(Modifier.height(8.dp))
+            HomeActionRow(Icons.Default.Cake, "Birthdays", "View today's and upcoming staff birthdays") {
+                vm.setTab(AppTab.BIRTHDAYS)
+            }
+        }
+
+        item {
+            Surface(
+                Modifier.fillMaxWidth(),
+                color = SurfaceWhite,
+                shape = RoundedCornerShape(18.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Border)
+            ) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(Navy.copy(.08f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Search, null, tint = Navy)
+                    }
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Find contacts quickly", color = TextDark, fontWeight = FontWeight.Bold)
+                        Text("Use the Directory tab to search and apply filters.", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Icon(Icons.Default.ChevronRight, null, tint = TextMuted)
+                }
+            }
+        }
+
+        item {
+            Surface(
+                Modifier.fillMaxWidth(),
+                color = SurfaceWhite,
+                shape = RoundedCornerShape(18.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Border)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Sync, null, tint = Green)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Directory status", fontWeight = FontWeight.Bold, color = TextDark)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "The directory currently contains " + all.size + " contacts. Updated records are available after Sync from Settings.",
+                        color = TextMuted,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+
+        item {
+            Surface(
+                Modifier.fillMaxWidth(),
+                color = SurfaceWhite,
+                shape = RoundedCornerShape(18.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Border)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Cake, null, tint = Gold)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Today's birthdays", fontWeight = FontWeight.Bold, color = TextDark)
+                        Spacer(Modifier.weight(1f))
+                        if (today.isNotEmpty()) {
                             Text(today.size.toString(), color = Navy, fontWeight = FontWeight.Bold)
                         }
-                        Spacer(Modifier.height(8.dp))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    if (today.isEmpty()) {
+                        Text("No staff birthday today.", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                    } else {
                         today.take(3).forEach { person ->
                             Row(Modifier.fillMaxWidth().clickable { onOpenOfficer(person) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                                 InitialAvatar(person.officerName)
@@ -429,46 +511,29 @@ fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenStaff: () -> Un
                         }
                     }
                 }
-            } else {
-                Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Cake, null, tint = Gold)
-                        Spacer(Modifier.width(9.dp))
-                        Column {
-                            Text("Birthdays", fontWeight = FontWeight.Bold, color = TextDark)
-                            Text("No birthday today", color = TextMuted, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
             }
         }
     }
 }
 
 @Composable
-fun HomeStatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String, tint: Color, modifier: Modifier = Modifier) {
-    Surface(modifier, color = SurfaceWhite, shape = RoundedCornerShape(14.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).clip(RoundedCornerShape(11.dp)).background(tint.copy(.10f)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = tint)
+fun HomeActionRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        color = SurfaceWhite,
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Border)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(46.dp).clip(RoundedCornerShape(13.dp)).background(Navy.copy(.08f)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = Navy, modifier = Modifier.size(25.dp))
             }
-            Spacer(Modifier.width(9.dp))
-            Column {
-                Text(value, color = TextDark, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-                Text(label, color = TextMuted, style = MaterialTheme.typography.labelSmall)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, color = TextDark, fontWeight = FontWeight.Bold)
+                Text(subtitle, color = TextMuted, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-        }
-    }
-}
-
-@Composable
-fun HomeQuickCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(modifier.clickable(onClick = onClick), color = SurfaceWhite, shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-        Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, tint = Navy, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.height(5.dp))
-            Text(title, color = TextDark, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
-            Text(subtitle, color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
+            Icon(Icons.Default.ChevronRight, null, tint = TextMuted)
         }
     }
 }
@@ -484,13 +549,6 @@ fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>,
                     if (state.district.equals("Jaipur", true)) "CEO Office HQ • Jaipur" else if (state.district == "All") "All Rajasthan staff" else state.district + " staff",
                     color = TextMuted, style = MaterialTheme.typography.bodySmall
                 )
-            }
-            Surface(color = Green.copy(.10f), shape = RoundedCornerShape(10.dp)) {
-                Row(Modifier.padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(Green))
-                    Spacer(Modifier.width(5.dp))
-                    Text("OFFLINE READY", color = Green, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                }
             }
         }
 
@@ -1091,65 +1149,47 @@ fun FilterSelector(
 fun SettingsSheet(
     darkMode: Boolean,
     onDarkMode: (Boolean) -> Unit,
-    onImport: (List<Officer>) -> Unit,
     onSync: suspend () -> Int,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var showAdminLogin by remember { mutableStateOf(false) }
-    var adminAuthenticated by remember { mutableStateOf(false) }
-    var pendingImportType by remember { mutableStateOf("") }
     var syncing by remember { mutableStateOf(false) }
     var syncMessage by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    fun startImport(type: String) {
-        pendingImportType = type
-        showAdminLogin = true
-    }
-
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            runCatching { parseXlsx(context, uri) }.onSuccess { items ->
-                if (items.isNotEmpty()) { onImport(items); toast(context, "Imported ${items.size} contacts") }
-                else toast(context, "No usable contacts found in the first sheet")
-            }.onFailure { toast(context, "Could not import Excel file: ${it.message ?: "invalid file"}") }
-        }
-    }
-    val jsonLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            runCatching { parseJson(context, uri) }.onSuccess { items ->
-                if (items.isNotEmpty()) { onImport(items); toast(context, "Imported ${items.size} contacts") }
-                else toast(context, "No usable contacts found in JSON")
-            }.onFailure { toast(context, "Could not import JSON file: ${it.message ?: "invalid file"}") }
-        }
-    }
-
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(22.dp).padding(bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Settings", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                if (adminAuthenticated) {
-                    AssistChip(onClick = { adminAuthenticated = false }, label = { Text("Admin logout") }, leadingIcon = { Icon(Icons.Default.LockOpen, null, Modifier.size(16.dp)) })
+                Icon(Icons.Default.Settings, null, tint = Navy, modifier = Modifier.size(28.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("Directory preferences and data sync", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            Spacer(Modifier.height(12.dp))
+
+            Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) { Text("Dark mode", fontWeight = FontWeight.SemiBold); Text("Use a darker interface in low light", color = Color.Gray) }
+                Column(Modifier.weight(1f)) {
+                    Text("Dark mode", fontWeight = FontWeight.SemiBold)
+                    Text("Use a darker interface in low light", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                }
                 Switch(darkMode, onDarkMode)
             }
-            Spacer(Modifier.height(14.dp))
-            Surface(color = if (adminAuthenticated) Green.copy(.10f) else Navy.copy(.08f), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (adminAuthenticated) Icons.Default.LockOpen else Icons.Default.Lock, null, tint = if (adminAuthenticated) Green else Navy)
-                    Spacer(Modifier.width(9.dp))
+
+            Spacer(Modifier.height(16.dp))
+            Surface(color = Navy.copy(.06f), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CloudSync, null, tint = Navy)
+                    Spacer(Modifier.width(10.dp))
                     Column {
-                        Text(if (adminAuthenticated) "Admin access enabled" else "Admin access required", fontWeight = FontWeight.SemiBold)
-                        Text(if (adminAuthenticated) "You can now import directory data." else "Excel and JSON imports are restricted to the administrator.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                        Text("Official directory sync", fontWeight = FontWeight.Bold, color = TextDark)
+                        Text("Refresh the local directory from the official online source. No login is required.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
+
+            Spacer(Modifier.height(10.dp))
             Button(
                 onClick = {
                     if (syncing) return@Button
@@ -1158,7 +1198,7 @@ fun SettingsSheet(
                     scope.launch {
                         runCatching { onSync() }
                             .onSuccess { count ->
-                                syncMessage = if (count > 0) "Synced " + count + " records from the official directory." else "No records were received."
+                                syncMessage = if (count > 0) "Directory updated successfully: " + count + " contacts." else "No records were received."
                                 toast(context, syncMessage)
                             }
                             .onFailure {
@@ -1168,7 +1208,7 @@ fun SettingsSheet(
                         syncing = false
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(13.dp),
                 enabled = !syncing,
                 colors = ButtonDefaults.buttonColors(containerColor = Navy)
@@ -1179,135 +1219,16 @@ fun SettingsSheet(
                     Icon(Icons.Default.Sync, null)
                 }
                 Spacer(Modifier.width(7.dp))
-                Text(if (syncing) "Syncing…" else "Sync")
+                Text(if (syncing) "Syncing…" else "Sync Official Directory")
             }
+
             if (syncMessage.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(syncMessage, color = if (syncMessage.startsWith("Sync failed")) MaterialTheme.colorScheme.error else Green, style = MaterialTheme.typography.bodySmall)
             }
-            Spacer(Modifier.height(10.dp))
-            OutlinedButton({ startImport("excel") }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) {
-                Icon(Icons.Default.Upload, null); Spacer(Modifier.width(7.dp)); Text("Import Directory Excel")
-            }
-            Spacer(Modifier.height(7.dp))
-            OutlinedButton({ startImport("json") }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) {
-                Icon(Icons.Default.Code, null); Spacer(Modifier.width(7.dp)); Text("Import Directory JSON")
-            }
-            Spacer(Modifier.height(7.dp))
-            Text(
-                "Sync updates/adds records from the official online directory. No login is required. Your local data remains available when offline.",
-                color = Color.Gray,
-                style = MaterialTheme.typography.bodySmall
-            )
-            Spacer(Modifier.height(7.dp))
-            Text(
-                "Manual Excel/JSON import replaces the current local directory and remains administrator-only.",
-                color = Color.Gray,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-    }
 
-    if (showAdminLogin) {
-        AdminLoginSheet(
-            onDismiss = { showAdminLogin = false },
-            onAuthenticated = {
-                adminAuthenticated = true
-                showAdminLogin = false
-                if (pendingImportType == "excel") launcher.launch(arrayOf("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"))
-                else jsonLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
-            }
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AdminLoginSheet(onDismiss: () -> Unit, onAuthenticated: () -> Unit) {
-    val context = LocalContext.current
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf("") }
-
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().padding(22.dp).padding(bottom = 28.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Settings, null, Modifier.size(30.dp), tint = Navy)
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text("Administrator Login", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text("Required before importing directory data", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            Spacer(Modifier.height(18.dp))
-            OutlinedTextField(username, { username = it; error = "" }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Username") }, leadingIcon = { Icon(Icons.Default.Person, null) })
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                password,
-                { password = it; error = "" },
-                Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("Password") },
-                visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                leadingIcon = { Icon(Icons.Default.Lock, null) },
-                trailingIcon = { IconButton({ passwordVisible = !passwordVisible }) { Icon(if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, "Show password") } }
-            )
-            if (error.isNotBlank()) {
-                Spacer(Modifier.height(8.dp)); Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
-            Spacer(Modifier.height(18.dp))
-            Button({
-                if (verifyAdminCredentials(username, password)) onAuthenticated()
-                else { error = "Invalid administrator username or password"; password = ""; toast(context, "Admin authentication failed") }
-            }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
-                Icon(Icons.Default.Login, null); Spacer(Modifier.width(7.dp)); Text("Authenticate & Continue")
-            }
-            Spacer(Modifier.height(8.dp))
-            Text("Only the administrator can change the local directory data.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-private const val ADMIN_USERNAME = "tulsaparihar.doit"
-private const val ADMIN_PASSWORD_SHA256 = "59f5fc5d0e7d4b0cdf2fc1a67784b1aab951fb44064c32f9fe846dc06a7d7997"
-
-fun verifyAdminCredentials(username: String, password: String): Boolean {
-    if (username.trim() != ADMIN_USERNAME) return false
-    val digest = MessageDigest.getInstance("SHA-256").digest(password.toByteArray(Charsets.UTF_8))
-    val hash = digest.joinToString("") { "%02x".format(it) }
-    return hash == ADMIN_PASSWORD_SHA256
-}
-
-fun parseJson(context: Context, uri: Uri): List<Officer> {
-    val text = context.contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() } ?: return emptyList()
-    val arr = JSONArray(text)
-    return buildList {
-        for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i) ?: continue
-            val name = o.optString("officerName", o.optString("name")).trim(); if (name.isBlank()) continue
-            val rawDistrict = o.optString("district").trim()
-            var district = rawDistrict; var sub = o.optString("subLocation").trim()
-            if (district.contains(",") && sub.isBlank()) { val parts = district.split(",").map { it.trim() }.filter { it.isNotBlank() }; if (parts.size >= 2) { sub = parts.dropLast(1).joinToString(", "); district = parts.last() } }
-            val contacts = o.optJSONArray("contactNumbers")?.let { a -> (0 until a.length()).map { a.optString(it) }.filter(String::isNotBlank).joinToString("|") } ?: normalizeContacts(o.optString("contactNumbers", o.optString("contactNo")))
-            add(
-                Officer(
-                    id = o.optInt("id", i + 1),
-                    officerName = name,
-                    designation = o.optString("designation"),
-                    officeDepartment = o.optString("officeDepartment", "ELECTION DEPARTMENT").ifBlank { "ELECTION DEPARTMENT" },
-                    district = district,
-                    subLocation = sub,
-                    sectionCell = o.optString("sectionCell", o.optString("section")),
-                    employeeId = o.optString("employeeId", o.optString("employeeID")),
-                    dob = o.optString("dob"),
-                    contactNumbers = contacts,
-                    email = o.optString("email"),
-                    remark = o.optString("remark"),
-                    isFavorite = o.optBoolean("isFavorite", false),
-                    seniorityOrder = readSeniorityOrder(o)
-                )
-            )
+            Spacer(Modifier.height(12.dp))
+            Text("The directory remains available offline using the data stored on this device.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -1381,76 +1302,6 @@ fun parseOfficialDirectoryJson(text: String): List<Officer> {
     }.sortedWith(compareBy<Officer>({ it.seniorityOrder }, { it.officerName.lowercase(Locale.getDefault()) }))
 }
 
-fun parseXlsx(context: Context, uri: Uri): List<Officer> {
-    val resolver = context.contentResolver
-    val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return emptyList()
-    val entries = mutableMapOf<String, ByteArray>()
-    ZipInputStream(bytes.inputStream()).use { zis ->
-        while (true) {
-            val e = zis.nextEntry ?: break
-            if (!e.isDirectory) entries[e.name] = zis.readBytes()
-        }
-    }
-    val shared = mutableListOf<String>()
-    entries["xl/sharedStrings.xml"]?.let { data ->
-        val p = android.util.Xml.newPullParser(); p.setInput(data.inputStream(), "UTF-8")
-        var event = p.eventType; var current = StringBuilder(); var inSi = false
-        while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
-            if (event == org.xmlpull.v1.XmlPullParser.START_TAG && p.name == "si") { current = StringBuilder(); inSi = true }
-            else if (inSi && event == org.xmlpull.v1.XmlPullParser.TEXT) current.append(p.text)
-            else if (event == org.xmlpull.v1.XmlPullParser.END_TAG && p.name == "si") { shared.add(current.toString()); inSi = false }
-            event = p.next()
-        }
-    }
-    val sheetName = entries.keys.firstOrNull { it == "xl/worksheets/sheet1.xml" } ?: return emptyList()
-    val parser = android.util.Xml.newPullParser(); parser.setInput(entries[sheetName]!!.inputStream(), "UTF-8")
-    val rows = mutableListOf<List<String>>(); var row = mutableListOf<String>(); var cellType = ""; var cellValue = ""; var cellColumn = 0; var inV = false; var inT = false
-    var event = parser.eventType
-    while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
-        when (event) {
-            org.xmlpull.v1.XmlPullParser.START_TAG -> when (parser.name) {
-                "row" -> row = mutableListOf()
-                "c" -> { cellType = parser.getAttributeValue(null, "t") ?: ""; cellColumn = excelColumnIndex(parser.getAttributeValue(null, "r") ?: "A1") }
-                "v" -> { inV = true; cellValue = "" }
-                "t" -> { inT = true; cellValue = "" }
-            }
-            org.xmlpull.v1.XmlPullParser.TEXT -> if (inV || inT) cellValue += parser.text
-            org.xmlpull.v1.XmlPullParser.END_TAG -> when (parser.name) {
-                "v", "t" -> { inV = false; inT = false }
-                "c" -> { while (row.size <= cellColumn) row.add(""); row[cellColumn] = if (cellType == "s") shared.getOrNull(cellValue.toIntOrNull() ?: -1) ?: "" else cellValue; cellType = "" }
-                "row" -> if (row.isNotEmpty()) rows.add(row)
-            }
-        }
-        event = parser.next()
-    }
-    if (rows.isEmpty()) return emptyList()
-    val headers = rows.first().map { normalizeHeader(it) }
-    fun col(vararg names: String): Int = names.map { normalizeHeader(it) }.firstNotNullOfOrNull { headers.indexOf(it).takeIf { n -> n >= 0 } } ?: -1
-    val nameI = col("officerName", "officer name", "name", "employee name")
-    val desI = col("designation", "post")
-    val deptI = col("officeDepartment", "office department", "department")
-    val distI = col("district", "district name")
-    val subI = col("subLocation", "sub location", "office", "location")
-    val contactI = col("contactNo", "contact no", "contact number", "mobile", "phone")
-    val emailI = col("email", "email id", "email address")
-    val remarkI = col("remark", "remarks", "notes")
-    val sectionI = col("sectionCell", "section cell", "section", "cell", "section / cell")
-    val employeeIdI = col("employeeId", "employee id", "employeeid", "emp id", "empid")
-    val dobI = col("dob", "date of birth", "birth date")
-    if (nameI < 0) return emptyList()
-    return rows.drop(1).mapIndexedNotNull { index, r ->
-        fun value(i: Int) = if (i in r.indices) r[i].trim() else ""
-        val name = value(nameI); if (name.isBlank()) return@mapIndexedNotNull null
-        var district = value(distI)
-        var subLocation = value(subI)
-        if (district.contains(",") && subLocation.isBlank()) {
-            val parts = district.split(",").map { it.trim() }.filter { it.isNotBlank() }
-            if (parts.size >= 2) { subLocation = parts.dropLast(1).joinToString(", "); district = parts.last() }
-        }
-        Officer(index + 1, name, value(desI), value(deptI).ifBlank { "ELECTION DEPARTMENT" }, district, subLocation, value(sectionI), value(employeeIdI), value(dobI), normalizeContacts(value(contactI)), value(emailI), value(remarkI))
-    }
-}
-
 fun excelColumnIndex(reference: String): Int {
     val letters = reference.takeWhile { it.isLetter() }.uppercase(Locale.getDefault())
     var result = 0
@@ -1464,42 +1315,76 @@ fun normalizeContacts(value: String): String = value.replace("\n", " ").split(Re
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OfficerDetails(o: Officer, onDismiss: () -> Unit) {
-    val context = LocalContext.current; val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.ArrowBack, "Back")
+                }
+                Text("Contact Details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextDark, modifier = Modifier.weight(1f))
+            }
+
+            Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                InitialAvatar(o.officerName); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) {
-                Text(o.officerName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(o.designation, color = Navy, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    if (isCeoHqStaff(o)) {
-                        Spacer(Modifier.width(7.dp))
-                        Surface(color = Gold.copy(.14f), shape = RoundedCornerShape(7.dp)) {
-                            Text("CEO HQ", color = Color(0xFF8A5A00), fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
+                InitialAvatar(o.officerName)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(o.officerName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(o.designation, color = Navy, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        if (isCeoHqStaff(o)) {
+                            Spacer(Modifier.width(7.dp))
+                            Surface(color = Gold.copy(.14f), shape = RoundedCornerShape(7.dp)) {
+                                Text("CEO HQ", color = Color(0xFF8A5A00), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
+                            }
                         }
                     }
                 }
             }
+
+            Spacer(Modifier.height(12.dp))
+            if (o.sectionCell.isNotBlank()) DetailRow(Icons.Default.Work, "Section / Cell: " + o.sectionCell)
+            if (o.employeeId.isNotBlank()) DetailRow(Icons.Default.Person, "Employee ID: " + o.employeeId)
+            if (o.dob.isNotBlank()) DetailRow(Icons.Default.Cake, "DOB: " + o.dob)
+            Spacer(Modifier.height(12.dp))
+            Surface(color = Gold.copy(.13f), shape = RoundedCornerShape(9.dp)) {
+                Text(o.officeDepartment, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = Color(0xFF704000), style = MaterialTheme.typography.labelMedium)
             }
-            Spacer(Modifier.height(12.dp)); if (o.sectionCell.isNotBlank()) DetailRow(Icons.Default.Work, "Section / Cell: ${o.sectionCell}")
-            if (o.employeeId.isNotBlank()) DetailRow(Icons.Default.Person, "Employee ID: ${o.employeeId}")
-            if (o.dob.isNotBlank()) DetailRow(Icons.Default.Cake, "DOB: ${o.dob}")
-            Spacer(Modifier.height(12.dp)); Surface(color = Gold.copy(.13f), shape = RoundedCornerShape(9.dp)) { Text(o.officeDepartment, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = Color(0xFF704000), style = MaterialTheme.typography.labelMedium) }
-            Spacer(Modifier.height(12.dp)); DetailRow(Icons.Default.LocationOn, "${o.locationLabel()}" )
-            Spacer(Modifier.height(10.dp)); Text("Contact", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            DetailRow(Icons.Default.LocationOn, o.locationLabel())
+            Spacer(Modifier.height(10.dp))
+            Text("Contact", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+
             o.mobile()?.let { ContactLine("Mobile", it, Icons.Default.Phone) { dial(context, it) } }
             o.officeNumbers().forEach { ContactLine("Office / EPABX", it, Icons.Default.Phone) { dial(context, it) } }
-            if (o.email.isNotBlank()) Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Email, null, tint = Navy); Spacer(Modifier.width(9.dp)); Column(Modifier.weight(1f)) { Text("Email", color = Color.Gray, style = MaterialTheme.typography.labelSmall); Text(o.email) }; IconButton({ clipboard.setText(AnnotatedString(o.email)); toast(context, "Email copied") }) { Icon(Icons.Default.ContentCopy, "Copy email") } }
-            if (o.remark.isNotBlank()) { Spacer(Modifier.height(7.dp)); Text("Remarks", fontWeight = FontWeight.Bold); Text(o.remark, color = Color.Gray) }
-            Spacer(Modifier.height(10.dp))
-            OutlinedButton({ openDirections(context, o.locationLabel()) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), enabled = o.locationLabel().isNotBlank()) {
-                Icon(Icons.Default.Navigation, null)
-                Spacer(Modifier.width(7.dp))
-                Text("Directions")
+
+            if (o.email.isNotBlank()) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Email, null, tint = Navy)
+                    Spacer(Modifier.width(9.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Email", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        Text(o.email)
+                    }
+                    IconButton({
+                        clipboard.setText(AnnotatedString(o.email))
+                        toast(context, "Email copied")
+                    }) {
+                        Icon(Icons.Default.ContentCopy, "Copy email")
+                    }
+                }
             }
-            Spacer(Modifier.height(10.dp))
+
+            if (o.remark.isNotBlank()) {
+                Spacer(Modifier.height(7.dp))
+                Text("Remarks", fontWeight = FontWeight.Bold)
+                Text(o.remark, color = Color.Gray)
+            }
+
+            Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ActionButton("Call", Icons.Default.Call, Green, o.mobile() != null) { o.mobile()?.let { dial(context, it) } }
@@ -1510,7 +1395,15 @@ fun OfficerDetails(o: Officer, onDismiss: () -> Unit) {
                     ActionButton("Save Contact", Icons.Default.PersonAdd, Color(0xFF596574), true) { saveContact(context, o) }
                 }
             }
-            if (o.mobile() != null) { Spacer(Modifier.height(8.dp)); OutlinedButton({ whatsapp(context, o.mobile()!!) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) { Icon(Icons.Default.Chat, null); Spacer(Modifier.width(7.dp)); Text("WhatsApp", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) } }
+
+            if (o.mobile() != null) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton({ whatsapp(context, o.mobile()!!) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) {
+                    Icon(Icons.Default.Chat, null)
+                    Spacer(Modifier.width(7.dp))
+                    Text("WhatsApp", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
     }
 }
@@ -1582,11 +1475,6 @@ fun formatDob(value: String): String {
     return d.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH))
 }
 
-fun openDirections(context: Context, location: String) {
-    val uri = Uri.parse("geo:0,0?q=" + Uri.encode(location))
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-        .onFailure { toast(context, "Maps is not available") }
-}
 fun dial(context: Context, number: String) { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${number.filter { it.isDigit() || it == '+' }}"))) }
 fun email(context: Context, address: String) { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$address"))) }
 fun whatsapp(context: Context, number: String) { val clean = number.filter(Char::isDigit); try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$clean"))) } catch (_: Exception) { toast(context, "WhatsApp is not available") } }
