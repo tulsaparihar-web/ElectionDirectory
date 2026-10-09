@@ -50,12 +50,24 @@ jobs:
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK
+      - name: Package full source and APK into one ZIP
+        run: |
+          mkdir -p release/package
+          cp app/build/outputs/apk/debug/app-debug.apk release/package/Election-Department-Directory-v1.7.apk
+          zip -r release/Election-Department-Directory-Full-Source-and-APK.zip . \
+            -x ".git/*" \
+               "app/build/*" \
+               ".gradle/*" \
+               "release/*" \
+               "*/build/*"
+
+      - name: Upload combined source and APK ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: Election-Contact-Directory-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: Election-Department-Directory-Full-Source-and-APK
+          path: release/Election-Department-Directory-Full-Source-and-APK.zip
           if-no-files-found: error
+
 
       - name: Upload build reports if build fails
         if: failure()
