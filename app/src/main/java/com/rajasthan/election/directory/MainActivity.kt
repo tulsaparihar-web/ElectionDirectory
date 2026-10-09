@@ -261,6 +261,9 @@ fun ceoHqSeniorityRank(o: Officer): Int {
     }
 }
 
+fun topTenSeniorContactIds(list: List<Officer>): Set<Int> =
+    sortBySeniorityOrder(list).take(10).map { it.id }.toSet()
+
 fun sortBySeniorityOrder(list: List<Officer>): List<Officer> = list.sortedWith(
     compareBy<Officer>(
         // CEO HQ staff (DOB present) always come before ordinary staff.
@@ -334,7 +337,13 @@ fun ElectionDirectoryApp() {
         }
     }
 
-    selected?.let { OfficerDetails(it, onDismiss = { selected = null }) }
+    selected?.let {
+        OfficerDetails(
+            it,
+            callRestricted = it.id in topTenSeniorContactIds(all),
+            onDismiss = { selected = null }
+        )
+    }
     if (showFilters) FilterSheet(vm, all, onDismiss = { showFilters = false })
     if (showAbout) AboutSheet(all.size, onDismiss = { showAbout = false })
     if (showSettings) SettingsSheet(
@@ -572,7 +581,9 @@ fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>,
                 verticalArrangement = Arrangement.spacedBy(7.dp),
                 contentPadding = PaddingValues(top = 2.dp, bottom = 12.dp)
             ) {
-                items(displayList, key = { it.id }) { CompactOfficerCard(it, onOpen) }
+                items(displayList, key = { it.id }) {
+                    CompactOfficerCard(it, onOpen, callRestricted = it.id in topTenSeniorContactIds(all))
+                }
             }
         }
     }
@@ -679,7 +690,7 @@ fun FilterButton(label: String, value: String, modifier: Modifier = Modifier, on
 }
 
 @Composable
-fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit) {
+fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, callRestricted: Boolean = false) {
     val context = LocalContext.current
     Card(Modifier.fillMaxWidth().clickable { onOpen(o) }, shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = SurfaceWhite), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
@@ -730,8 +741,14 @@ fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit) {
             }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                o.mobile()?.let { SmallAction("Call", Icons.Default.Call) { dial(context, it) } }
-                o.mobile()?.let { SmallAction("WhatsApp", Icons.Default.Chat) { whatsapp(context, it) } }
+                if (o.mobile() != null) {
+                    SmallAction(
+                        if (callRestricted) "Call restricted" else "Call",
+                        Icons.Default.Call,
+                        enabled = !callRestricted
+                    ) { o.mobile()?.let { dial(context, it) } }
+                    SmallAction("WhatsApp", Icons.Default.Chat) { o.mobile()?.let { whatsapp(context, it) } }
+                }
                 if (o.email.isNotBlank()) SmallAction("Email", Icons.Default.Email) { email(context, o.email) }
                 SmallAction("Details", Icons.Default.Visibility) { onOpen(o) }
             }
@@ -740,9 +757,10 @@ fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit) {
 }
 
 @Composable
-fun SmallAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+fun SmallAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, enabled: Boolean = true, onClick: () -> Unit) {
     FilledTonalButton(
         onClick = onClick,
+        enabled = enabled,
         shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.filledTonalButtonColors(containerColor = Navy.copy(.08f), contentColor = Navy),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
@@ -1294,7 +1312,7 @@ fun normalizeContacts(value: String): String = value.replace("\n", " ").split(Re
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OfficerDetails(o: Officer, onDismiss: () -> Unit) {
+fun OfficerDetails(o: Officer, callRestricted: Boolean = false, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
@@ -1367,7 +1385,12 @@ fun OfficerDetails(o: Officer, onDismiss: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ActionButton("Call", Icons.Default.Call, Green, o.mobile() != null) { o.mobile()?.let { dial(context, it) } }
+                    ActionButton(
+                        if (callRestricted) "Call restricted" else "Call",
+                        Icons.Default.Call,
+                        Green,
+                        o.mobile() != null && !callRestricted
+                    ) { if (!callRestricted) o.mobile()?.let { dial(context, it) } }
                     ActionButton("Email", Icons.Default.Email, Navy, o.email.isNotBlank()) { email(context, o.email) }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1378,10 +1401,15 @@ fun OfficerDetails(o: Officer, onDismiss: () -> Unit) {
 
             if (o.mobile() != null) {
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton({ whatsapp(context, o.mobile()!!) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) {
+                Button(
+                    onClick = { whatsapp(context, o.mobile()!!) },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(13.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF128C7E))
+                ) {
                     Icon(Icons.Default.Chat, null)
-                    Spacer(Modifier.width(7.dp))
-                    Text("WhatsApp", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Open WhatsApp", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
