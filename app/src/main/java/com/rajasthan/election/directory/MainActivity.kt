@@ -456,7 +456,7 @@ fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Offic
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     HomeStatCard(Icons.Default.People, contactCount.toString(), "Contacts", Modifier.weight(1f), Navy)
-                    HomeStatCard(Icons.Default.LocationCity, districtCount.toString(), "Districts", Modifier.weight(1f), Navy)
+                    HomeStatCard(Icons.Default.LocationCity, (districtCount - 1).coerceAtLeast(0).toString(), "Districts", Modifier.weight(1f), Navy)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     HomeStatCard(Icons.Default.Badge, designationCount.toString(), "Designations", Modifier.weight(1f), Navy)
