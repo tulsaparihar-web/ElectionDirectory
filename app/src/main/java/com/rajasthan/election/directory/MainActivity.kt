@@ -632,7 +632,7 @@ fun StaffScreen(vm: DirectoryViewModel, all: List<Officer>, list: List<Officer>,
                 contentPadding = PaddingValues(top = 2.dp, bottom = 12.dp)
             ) {
                 items(displayList, key = { it.id }) {
-                    CompactOfficerCard(it, onOpen, callRestricted = it.id in topTenSeniorContactIds(all))
+                    CompactOfficerCard(it, onOpen, callRestricted = contactRestrictionKey(it) in topTenSeniorContactKeys(all))
                 }
             }
         }
