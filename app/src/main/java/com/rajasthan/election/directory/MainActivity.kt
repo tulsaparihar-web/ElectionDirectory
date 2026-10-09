@@ -395,6 +395,40 @@ fun Header(onAbout: () -> Unit, onSettings: () -> Unit) {
 }
 
 @Composable
+private fun HomeStatCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    accent: Color = Navy
+) {
+    Surface(
+        modifier = modifier,
+        color = SurfaceWhite,
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Border),
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(accent.copy(.09f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(21.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(value, color = TextDark, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(label, color = TextMuted, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+@Composable
 fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Officer) -> Unit) {
     val today = all.filter { isBirthdayToday(it.dob) }
     LazyColumn(
@@ -410,17 +444,23 @@ fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Offic
             }
         }
         item {
-            Surface(Modifier.fillMaxWidth(), color = Navy, shape = RoundedCornerShape(20.dp), shadowElevation = 2.dp) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(.12f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.People, null, tint = Color.White, modifier = Modifier.size(27.dp))
-                    }
-                    Spacer(Modifier.width(13.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Staff directory", color = Color.White.copy(.82f), style = MaterialTheme.typography.labelLarge)
-                        Text(all.size.toString(), color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                        Text("contacts available on this device", color = Color.White.copy(.82f), style = MaterialTheme.typography.bodySmall)
-                    }
+            val contactCount = all.size
+            val districtCount = all.flatMap { officer ->
+                officer.district.split(",").map(String::trim)
+            }.filter { it.isNotBlank() }.distinctBy { it.lowercase(Locale.ROOT) }.size
+            val designationCount = all.map { it.designation.trim() }
+                .filter { it.isNotBlank() }.distinctBy { it.lowercase(Locale.ROOT) }.size
+            val sectionCount = all.map { it.sectionCell.trim() }
+                .filter { it.isNotBlank() }.distinctBy { it.lowercase(Locale.ROOT) }.size
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HomeStatCard(Icons.Default.People, contactCount.toString(), "Contacts", Modifier.weight(1f), Navy)
+                    HomeStatCard(Icons.Default.LocationCity, districtCount.toString(), "Districts", Modifier.weight(1f), Navy)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HomeStatCard(Icons.Default.Badge, designationCount.toString(), "Designations", Modifier.weight(1f), Navy)
+                    HomeStatCard(Icons.Default.Groups, sectionCount.toString(), "Sections", Modifier.weight(1f), Navy)
                 }
             }
         }
