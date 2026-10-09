@@ -52,14 +52,15 @@ jobs:
 
       - name: Package full source and APK into one ZIP
         run: |
-          mkdir -p release/package
-          cp app/build/outputs/apk/debug/app-debug.apk release/package/Election-Department-Directory-v1.7.apk
+          mkdir -p release "$RUNNER_TEMP/election-directory-package"
+          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/election-directory-package/Election-Department-Directory-v1.7.apk"
           zip -r release/Election-Department-Directory-Full-Source-and-APK.zip . \
             -x ".git/*" \
                "app/build/*" \
                ".gradle/*" \
                "release/*" \
                "*/build/*"
+          zip -j release/Election-Department-Directory-Full-Source-and-APK.zip "$RUNNER_TEMP/election-directory-package/Election-Department-Directory-v1.7.apk"
 
       - name: Upload combined source and APK ZIP
         uses: actions/upload-artifact@v4
