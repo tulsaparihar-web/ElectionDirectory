@@ -416,9 +416,6 @@ fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Offic
                         Text(all.size.toString(), color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                         Text("contacts available on this device", color = Color.White.copy(.82f), style = MaterialTheme.typography.bodySmall)
                     }
-                    Surface(color = Gold, shape = RoundedCornerShape(10.dp)) {
-                        Text("VIEW STAFF", color = NavyDark, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp))
-                    }
                 }
             }
         }
