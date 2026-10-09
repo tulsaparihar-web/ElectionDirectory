@@ -794,15 +794,23 @@ fun MoreOption(icon: androidx.compose.ui.graphics.vector.ImageVector, title: Str
 
 @Composable
 fun OfficesScreen(all: List<Officer>, onOpen: (String) -> Unit, onContact: (Officer) -> Unit) {
-    val grouped = all.groupBy { primaryDistrict(it) }
-        .toSortedMap(compareBy<String> { if (it.equals("Jaipur", ignoreCase = true)) 0 else 1 }
-            .thenBy { it.lowercase(Locale.getDefault()) })
+    // CEO HQ is a separate organizational entity, not a district. Staff with DOB
+    // are identified as CEO HQ staff in this directory and shown in this first group.
+    val hqStaff = all.filter { isCeoHqStaff(it) }
+    val districtGroups = all.filterNot { isCeoHqStaff(it) }
+        .groupBy { primaryDistrict(it) }
+        .toSortedMap(compareBy<String> { it.lowercase(Locale.getDefault()) })
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("Office Directory", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
-        Text("Browse staff by district and location", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Browse offices and staff by district", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-            grouped.forEach { (district, staff) ->
+            if (hqStaff.isNotEmpty()) {
+                item {
+                    OfficeCard("CEO Office HQ", hqStaff, { onOpen("CEO Office HQ") }, onContact)
+                }
+            }
+            districtGroups.forEach { (district, staff) ->
                 item {
                     OfficeCard(district, staff, onOpen, onContact)
                 }
