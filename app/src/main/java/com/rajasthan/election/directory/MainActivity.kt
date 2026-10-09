@@ -156,7 +156,11 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
             val searchable = listOf(o.officerName, o.designation, o.officeDepartment, o.district,
                 o.subLocation, o.sectionCell, o.employeeId, o.dob, o.email, o.contactNumbers, o.remark)
             val matchesQuery = q.isBlank() || searchable.any { it.lowercase(Locale.getDefault()).contains(q) }
-            val matchesDistrict = s.district == "All" || o.district.split(",").any { it.trim().equals(s.district, true) }
+            val matchesDistrict = when {
+                s.district == "All" -> true
+                s.district.equals("CEO Office HQ", true) -> isCeoHqStaff(o)
+                else -> o.district.split(",").any { it.trim().equals(s.district, true) }
+            }
             val matchesDesignation = s.designation == "All" || o.designation.equals(s.designation, true)
             val matchesSection = s.sectionCell == "All" || o.sectionCell.equals(s.sectionCell, true)
             matchesQuery && matchesDistrict && matchesDesignation && matchesSection
