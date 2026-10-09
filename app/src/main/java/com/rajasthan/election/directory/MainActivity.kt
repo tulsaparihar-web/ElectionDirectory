@@ -378,101 +378,94 @@ fun Header(onAbout: () -> Unit, onSettings: () -> Unit) {
 
 @Composable
 fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Officer) -> Unit) {
-    val today = all.filter { isBirthdayToday(it.dob) }.sortedBy { it.officerName.lowercase(Locale.getDefault()) }
+    val today = all.filter { isBirthdayToday(it.dob) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(top = 18.dp, bottom = 24.dp)
     ) {
         item {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = SurfaceWhite,
-                shape = RoundedCornerShape(20.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Border),
-                shadowElevation = 1.dp
-            ) {
-                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)).background(Navy.copy(.08f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.AccountBalance, null, tint = Navy, modifier = Modifier.size(29.dp))
+            Column {
+                Text("Welcome", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = TextDark)
+                Spacer(Modifier.height(3.dp))
+                Text("What would you like to find today?", style = MaterialTheme.typography.bodyLarge, color = TextMuted)
+            }
+        }
+        item {
+            Surface(Modifier.fillMaxWidth(), color = Navy, shape = RoundedCornerShape(20.dp), shadowElevation = 2.dp) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(.12f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.People, null, tint = Color.White, modifier = Modifier.size(27.dp))
                     }
                     Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Welcome", style = MaterialTheme.typography.labelLarge, color = Navy, fontWeight = FontWeight.Bold)
-                        Text("Staff & Office Directory", style = MaterialTheme.typography.titleLarge, color = TextDark, fontWeight = FontWeight.Bold)
-                        Text("Rajasthan Election Department", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
-                        Spacer(Modifier.height(10.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(8.dp).clip(CircleShape).background(Green))
-                            Spacer(Modifier.width(6.dp))
-                            Text("${all.size} contacts available on this device", style = MaterialTheme.typography.labelMedium, color = TextMuted)
+                        Text("Staff directory", color = Color.White.copy(.82f), style = MaterialTheme.typography.labelLarge)
+                        Text(all.size.toString(), color = Color.White, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                        Text("contacts available on this device", color = Color.White.copy(.82f), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Surface(color = Gold, shape = RoundedCornerShape(10.dp)) {
+                        Text("VIEW STAFF", color = NavyDark, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp))
+                    }
+                }
+            }
+        }
+        item {
+            Text("Quick access", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextDark)
+        }
+        item {
+            HomeActionRow(Icons.Default.People, "Staff Directory", "Search by name, phone, designation, office or Employee ID") {
+                vm.setQuery("")
+                vm.setDistrict("All")
+                vm.setDesignation("All")
+                vm.setSectionCell("All")
+                vm.setTab(AppTab.DIRECTORY)
+            }
+        }
+        item { HomeActionRow(Icons.Default.Business, "Office Directory", "Browse offices and staff by district") { vm.setTab(AppTab.OFFICES) } }
+        item {
+            HomeActionRow(Icons.Default.Cake, "Birthdays", "View today's and upcoming staff birthdays", trailingText = if (today.isNotEmpty()) today.size.toString() else null) {
+                vm.setTab(AppTab.BIRTHDAYS)
+            }
+        }
+        item {
+            Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(18.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Green.copy(.10f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Sync, null, tint = Green, modifier = Modifier.size(20.dp))
                         }
-                    }
-                }
-            }
-        }
-        item {
-            Column {
-                Text("Quick access", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextDark)
-                Text("Choose what you want to find", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-            }
-        }
-        item {
-            HomeActionRow(Icons.Default.People, "Staff Directory", "Search by name, phone, designation or Employee ID") {
-                vm.setQuery(""); vm.setDistrict("All"); vm.setDesignation("All"); vm.setSectionCell("All"); vm.setTab(AppTab.DIRECTORY)
-            }
-        }
-        item { HomeActionRow(Icons.Default.Business, "Office Directory", "Browse staff and locations by district") { vm.setTab(AppTab.OFFICES) } }
-        item { HomeActionRow(Icons.Default.Cake, "Birthdays", "See today's and upcoming birthdays", if (today.isEmpty()) null else today.size.toString()) { vm.setTab(AppTab.BIRTHDAYS) } }
-        item {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = Navy.copy(.045f),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Navy.copy(.10f))
-            ) {
-                Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CloudSync, null, tint = Navy, modifier = Modifier.size(23.dp))
-                    Spacer(Modifier.width(11.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Directory data", color = TextDark, fontWeight = FontWeight.SemiBold)
-                        Text("Sync from Settings to refresh contacts. Saved records remain available offline.", color = TextMuted, style = MaterialTheme.typography.bodySmall)
-                    }
-                    IconButton(onClick = { vm.setTab(AppTab.MORE) }) { Icon(Icons.Default.ChevronRight, "Open more options", tint = Navy) }
-                }
-            }
-        }
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Today's birthdays", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextDark)
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = { vm.setTab(AppTab.BIRTHDAYS) }) { Text("View all") }
-            }
-        }
-        if (today.isEmpty()) {
-            item {
-                Surface(Modifier.fillMaxWidth(), color = SurfaceWhite, shape = RoundedCornerShape(14.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Cake, null, tint = TextMuted)
                         Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text("No birthdays today", color = TextDark, fontWeight = FontWeight.SemiBold)
-                            Text("Upcoming birthdays are available in the Birthdays tab.", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                        Column(Modifier.weight(1f)) {
+                            Text("Directory status", color = TextDark, fontWeight = FontWeight.Bold)
+                            Text("Your directory is stored on this device and remains available offline.", color = TextMuted, style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                }
-            }
-        } else {
-            items(today.take(3), key = { "home-birthday-" + it.id }) { person ->
-                Surface(Modifier.fillMaxWidth().clickable { onOpenOfficer(person) }, color = SurfaceWhite, shape = RoundedCornerShape(14.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
-                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        InitialAvatar(person.officerName)
-                        Spacer(Modifier.width(11.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(person.officerName, fontWeight = FontWeight.SemiBold, color = TextDark, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(person.designation, color = TextMuted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(12.dp))
+                    HorizontalDivider(color = Border)
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Cake, null, tint = Gold)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Today's birthdays", color = TextDark, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.weight(1f))
+                        Text(today.size.toString(), color = Navy, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    }
+                    if (today.isEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("No staff birthdays today.", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        Spacer(Modifier.height(5.dp))
+                        today.take(3).forEach { person ->
+                            Row(Modifier.fillMaxWidth().clickable { onOpenOfficer(person) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                InitialAvatar(person.officerName)
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(person.officerName, fontWeight = FontWeight.SemiBold, color = TextDark)
+                                    Text(person.designation, color = TextMuted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                Icon(Icons.Default.ChevronRight, null, tint = TextMuted)
+                            }
                         }
-                        Icon(Icons.Default.ChevronRight, null, tint = TextMuted)
                     }
                 }
             }
@@ -485,33 +478,27 @@ fun HomeActionRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtitle: String,
-    badge: String? = null,
+    trailingText: String? = null,
     onClick: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        color = SurfaceWhite,
-        shape = RoundedCornerShape(17.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Border),
-        shadowElevation = 1.dp
-    ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Navy.copy(.08f)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = Navy, modifier = Modifier.size(25.dp))
+    Surface(Modifier.fillMaxWidth().clickable(onClick = onClick), color = SurfaceWhite, shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(46.dp).clip(RoundedCornerShape(13.dp)).background(Navy.copy(.08f)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = Navy, modifier = Modifier.size(24.dp))
             }
-            Spacer(Modifier.width(13.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, color = TextDark, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(2.dp))
                 Text(subtitle, color = TextMuted, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (badge != null) {
-                Spacer(Modifier.width(7.dp))
-                Surface(color = Gold.copy(.18f), shape = CircleShape) {
-                    Text(badge, color = Navy, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
+            if (trailingText != null) {
+                Spacer(Modifier.width(8.dp))
+                Surface(color = Gold.copy(.16f), shape = RoundedCornerShape(8.dp)) {
+                    Text(trailingText, color = NavyDark, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
                 }
             }
-            Spacer(Modifier.width(3.dp))
+            Spacer(Modifier.width(4.dp))
             Icon(Icons.Default.ChevronRight, null, tint = TextMuted)
         }
     }
