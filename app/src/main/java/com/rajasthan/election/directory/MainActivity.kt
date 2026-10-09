@@ -170,7 +170,7 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
     fun setSectionCell(v: String) { _state.update { it.copy(sectionCell = v) } }
     fun setTab(v: AppTab) { _state.update { it.copy(tab = v) } }
     fun clearFilters() { _state.update { it.copy(query = "", district = "All", designation = "All", sectionCell = "All") } }
-    fun clearFilterOnly() { _state.update { it.copy(query = "", district = "Jaipur", designation = "All", sectionCell = "All") } }
+    fun clearFilterOnly() { _state.update { it.copy(query = "", district = "All", designation = "All", sectionCell = "All") } }
     fun setDarkMode(v: Boolean) { _state.update { it.copy(darkMode = v) } }
     fun replaceData(items: List<Officer>) = viewModelScope.launch { repo.replace(items) }
 }
@@ -794,7 +794,9 @@ fun MoreOption(icon: androidx.compose.ui.graphics.vector.ImageVector, title: Str
 
 @Composable
 fun OfficesScreen(all: List<Officer>, onOpen: (String) -> Unit, onContact: (Officer) -> Unit) {
-    val grouped = all.groupBy { primaryDistrict(it) }.toSortedMap()
+    val grouped = all.groupBy { primaryDistrict(it) }
+        .toSortedMap(compareBy<String> { if (it.equals("Jaipur", ignoreCase = true)) 0 else 1 }
+            .thenBy { it.lowercase(Locale.getDefault()) })
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("Office Directory", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextDark)
         Text("Browse staff by district and location", color = MaterialTheme.colorScheme.onSurfaceVariant)
