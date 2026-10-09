@@ -261,8 +261,13 @@ fun ceoHqSeniorityRank(o: Officer): Int {
     }
 }
 
+// Restrict calling only for the 10 most senior contacts within CEO Office HQ.
+// Do not take the first 10 from the entire Rajasthan directory.
 fun topTenSeniorContactIds(list: List<Officer>): Set<Int> =
-    sortBySeniorityOrder(list).take(10).map { it.id }.toSet()
+    sortCeoHqBySeniority(list.filter { isCeoHqStaff(it) })
+        .take(10)
+        .map { it.id }
+        .toSet()
 
 fun sortBySeniorityOrder(list: List<Officer>): List<Officer> = list.sortedWith(
     compareBy<Officer>(
