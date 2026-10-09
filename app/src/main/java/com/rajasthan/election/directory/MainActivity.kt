@@ -261,12 +261,20 @@ fun ceoHqSeniorityRank(o: Officer): Int {
     }
 }
 
+// Stable contact key avoids accidentally restricting multiple staff when source records reuse an ID.
+fun contactRestrictionKey(o: Officer): String =
+    listOf(
+        normalizedPersonName(o.officerName),
+        normalizedPersonName(o.designation),
+        normalizedPersonName(o.district),
+        o.employeeId.trim().uppercase(Locale.ROOT)
+    ).joinToString("|")
+
 // Restrict calling only for the 10 most senior contacts within CEO Office HQ.
-// Do not take the first 10 from the entire Rajasthan directory.
-fun topTenSeniorContactIds(list: List<Officer>): Set<Int> =
+fun topTenSeniorContactKeys(list: List<Officer>): Set<String> =
     sortCeoHqBySeniority(list.filter { isCeoHqStaff(it) })
         .take(10)
-        .map { it.id }
+        .map { contactRestrictionKey(it) }
         .toSet()
 
 fun sortBySeniorityOrder(list: List<Officer>): List<Officer> = list.sortedWith(
@@ -345,7 +353,7 @@ fun ElectionDirectoryApp() {
     selected?.let {
         OfficerDetails(
             it,
-            callRestricted = it.id in topTenSeniorContactIds(all),
+            callRestricted = contactRestrictionKey(it) in topTenSeniorContactKeys(all),
             onDismiss = { selected = null }
         )
     }
@@ -1535,11 +1543,25 @@ fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.
 @Composable
 fun rememberDirectoryViewModel(): DirectoryViewModel {
     val context = LocalContext.current
-    val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "election_directory.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3).build() }
+    val appContext = context.applicationContext
+    val db = remember { Room.databaseBuilder(appContext, AppDatabase::class.java, "election_directory.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3).build() }
     val repo = remember { OfficerRepository(db.officerDao()) }
     val vm = remember { DirectoryViewModel(repo) }
     LaunchedEffect(Unit) {
-        if (repo.officers.first().isEmpty()) seedDatabase(context, repo)
+        if (repo.officers.first().isEmpty()) seedDatabase(appContext, repo)
+
+        // Attempt official-directory sync once on the first app launch after installation.
+        // Persist the attempt even if offline; users can retry later from Settings.
+        val prefs = appContext.getSharedPreferences("directory_startup", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("first_launch_auto_sync_attempted", false)) {
+            try {
+                vm.syncFromOfficialDirectory()
+            } catch (_: Exception) {
+                // Keep the bundled/offline directory available if the network is unavailable.
+            } finally {
+                prefs.edit().putBoolean("first_launch_auto_sync_attempted", true).apply()
+            }
+        }
     }
     return vm
 }
