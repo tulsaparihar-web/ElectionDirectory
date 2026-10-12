@@ -69,8 +69,10 @@ data class Officer(
     val isFavorite: Boolean = false,
     val seniorityOrder: Int = DEFAULT_SENIORITY_ORDER
 ) {
-    fun phones(): List<String> = contactNumbers.split("|").map { it.trim() }.filter { it.isNotBlank() }
+    // Accept current and legacy DB formats for phone numbers.
+    fun phones(): List<String> = contactNumbers.split(Regex("[|,;\\n]+")).map { it.trim() }.filter { it.isNotBlank() }
     fun mobile(): String? = phones().firstOrNull { it.filter(Char::isDigit).length >= 10 }
+    fun callNumber(): String? = mobile() ?: phones().firstOrNull()
     fun officeNumbers(): List<String> = phones().filter { it != mobile() }
     fun locationLabel(): String = listOf(subLocation, district)
         .filter { it.isNotBlank() }.joinToString(", ")
@@ -317,7 +319,6 @@ fun ElectionDirectoryApp() {
     val filtered by vm.filtered.collectAsState()
     var selected by remember { mutableStateOf<Officer?>(null) }
     var showFilters by remember { mutableStateOf(false) }
-    var filterFocus by remember { mutableStateOf<String?>(null) }
     var showAbout by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
 
@@ -345,7 +346,7 @@ fun ElectionDirectoryApp() {
             Column(Modifier.fillMaxSize().padding(padding)) {
                 Header(onAbout = { showAbout = true }, onSettings = { showSettings = true })
                 when (state.tab) {
-                    AppTab.HOME -> HomeScreen(vm, all, onOpenOfficer = { selected = it }, onQuickFilter = { filter -> filterFocus = filter; vm.setTab(AppTab.DIRECTORY); showFilters = true })
+                    AppTab.HOME -> HomeScreen(vm, all, onOpenOfficer = { selected = it })
                     AppTab.DIRECTORY -> StaffScreen(vm, all, filtered, state, onOpen = { selected = it }, onFilter = { showFilters = true })
                     AppTab.OFFICES -> OfficesScreen(all, onOpen = { vm.setTab(AppTab.DIRECTORY); vm.setDistrict(it) }, onContact = { selected = it })
                     AppTab.BIRTHDAYS -> BirthdaysScreen(all, onOpen = { selected = it })
@@ -366,7 +367,7 @@ fun ElectionDirectoryApp() {
             onDismiss = { selected = null }
         )
     }
-    if (showFilters) FilterSheet(vm, all, initialExpandedFilter = filterFocus, onDismiss = { showFilters = false; filterFocus = null })
+    if (showFilters) FilterSheet(vm, all, onDismiss = { showFilters = false })
     if (showAbout) AboutSheet(all.size, onDismiss = { showAbout = false })
     if (showSettings) SettingsSheet(
         darkMode = state.darkMode,
@@ -417,11 +418,10 @@ private fun HomeStatCard(
     value: String,
     label: String,
     modifier: Modifier = Modifier,
-    accent: Color = Navy,
-    onClick: () -> Unit = {}
+    accent: Color = Navy
 ) {
     Surface(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier,
         color = SurfaceWhite,
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, Border),
@@ -447,7 +447,7 @@ private fun HomeStatCard(
 }
 
 @Composable
-fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Officer) -> Unit, onQuickFilter: (String?) -> Unit = {}) {
+fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Officer) -> Unit) {
     val today = all.filter { isBirthdayToday(it.dob) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -473,12 +473,12 @@ fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Offic
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HomeStatCard(Icons.Default.People, contactCount.toString(), "Contacts", Modifier.weight(1f), Navy) { onQuickFilter(null) }
-                    HomeStatCard(Icons.Default.LocationCity, (districtCount - 1).coerceAtLeast(0).toString(), "Districts", Modifier.weight(1f), Navy) { onQuickFilter("District") }
+                    HomeStatCard(Icons.Default.People, contactCount.toString(), "Contacts", Modifier.weight(1f), Navy)
+                    HomeStatCard(Icons.Default.LocationCity, (districtCount - 1).coerceAtLeast(0).toString(), "Districts", Modifier.weight(1f), Navy)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HomeStatCard(Icons.Default.Badge, designationCount.toString(), "Designations", Modifier.weight(1f), Navy) { onQuickFilter("Designation") }
-                    HomeStatCard(Icons.Default.Groups, sectionCount.toString(), "Sections", Modifier.weight(1f), Navy) { onQuickFilter("Section / Cell") }
+                    HomeStatCard(Icons.Default.Badge, designationCount.toString(), "Designations", Modifier.weight(1f), Navy)
+                    HomeStatCard(Icons.Default.Groups, sectionCount.toString(), "Sections", Modifier.weight(1f), Navy)
                 }
             }
         }
@@ -801,13 +801,13 @@ fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, callRestricted: Bo
             }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (o.mobile() != null) {
+                if (o.callNumber() != null) {
                     SmallAction(
                         if (callRestricted) "Call restricted" else "Call",
                         Icons.Default.Call,
                         enabled = !callRestricted
-                    ) { o.mobile()?.let { dial(context, it) } }
-                    SmallAction("WhatsApp", Icons.Default.Chat) { o.mobile()?.let { whatsapp(context, it) } }
+                    ) { if (!callRestricted) o.callNumber()?.let { dial(context, it) } }
+                    if (o.mobile() != null) SmallAction("WhatsApp", Icons.Default.Chat) { o.mobile()?.let { whatsapp(context, it) } }
                 }
                 if (o.email.isNotBlank()) SmallAction("Email", Icons.Default.Email) { email(context, o.email) }
                 SmallAction("Details", Icons.Default.Visibility) { onOpen(o) }
@@ -1002,7 +1002,7 @@ fun EmptyState(title: String, message: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, initialExpandedFilter: String? = null, onDismiss: () -> Unit) {
+fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Unit) {
     val state by vm.state.collectAsState()
 
     var localDistrict by remember(state.district) { mutableStateOf(state.district) }
@@ -1091,7 +1091,6 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, initialExpandedFilte
                 label = "District",
                 selected = localDistrict,
                 values = districtValues,
-                autoExpand = initialExpandedFilter == "District",
                 onSelect = {
                     localDistrict = it
                     localDesignation = "All"
@@ -1105,7 +1104,6 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, initialExpandedFilte
                 label = "Designation",
                 selected = localDesignation,
                 values = designationValues,
-                autoExpand = initialExpandedFilter == "Designation",
                 onSelect = {
                     localDesignation = it
                     localSection = "All"
@@ -1118,7 +1116,6 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, initialExpandedFilte
                 label = "Section / Cell",
                 selected = localSection,
                 values = sectionValues,
-                autoExpand = initialExpandedFilter == "Section / Cell",
                 onSelect = { localSection = it }
             )
 
@@ -1147,10 +1144,9 @@ fun FilterSelector(
     label: String,
     selected: String,
     values: List<String>,
-    autoExpand: Boolean = false,
     onSelect: (String) -> Unit
 ) {
-    var expanded by remember(label, autoExpand) { mutableStateOf(autoExpand) }
+    var expanded by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
     val displaySelected = when {
         selected != "All" -> selected
@@ -1453,8 +1449,8 @@ fun OfficerDetails(o: Officer, callRestricted: Boolean = false, onDismiss: () ->
                         if (callRestricted) "Call restricted" else "Call",
                         Icons.Default.Call,
                         Green,
-                        o.mobile() != null && !callRestricted
-                    ) { if (!callRestricted) o.mobile()?.let { dial(context, it) } }
+                        o.callNumber() != null && !callRestricted
+                    ) { if (!callRestricted) o.callNumber()?.let { dial(context, it) } }
                     ActionButton("Email", Icons.Default.Email, Navy, o.email.isNotBlank()) { email(context, o.email) }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1549,7 +1545,16 @@ fun formatDob(value: String): String {
 
 fun dial(context: Context, number: String) { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${number.filter { it.isDigit() || it == '+' }}"))) }
 fun email(context: Context, address: String) { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$address"))) }
-fun whatsapp(context: Context, number: String) { val clean = number.filter(Char::isDigit); try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$clean"))) } catch (_: Exception) { toast(context, "WhatsApp is not available") } }
+fun whatsapp(context: Context, number: String) {
+    var clean = number.filter(Char::isDigit)
+    // The official directory usually stores Indian numbers without country code.
+    if (clean.length == 10) clean = "91$clean"
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$clean")))
+    } catch (_: Exception) {
+        toast(context, "WhatsApp is not available")
+    }
+}
 fun shareContact(context: Context, o: Officer) { val body = buildString { append(o.officerName).append('\n'); append(o.designation).append('\n'); append(o.officeDepartment).append('\n'); append("Location: ${o.locationLabel()}\n"); if (o.phones().isNotEmpty()) append("Phone: ${o.phones().joinToString(", ")}\n"); if (o.email.isNotBlank()) append("Email: ${o.email}\n"); if (o.remark.isNotBlank()) append("Remarks: ${o.remark}") }; context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, body) }, "Share Contact")) }
 fun saveContact(context: Context, o: Officer) { val i = Intent(Intent.ACTION_INSERT).apply { type = ContactsContract.RawContacts.CONTENT_TYPE; putExtra(ContactsContract.Intents.Insert.NAME, o.officerName); putExtra(ContactsContract.Intents.Insert.PHONE, o.mobile()); putExtra(ContactsContract.Intents.Insert.EMAIL, o.email); putExtra(ContactsContract.Intents.Insert.COMPANY, o.officeDepartment); putExtra(ContactsContract.Intents.Insert.JOB_TITLE, o.designation) }; context.startActivity(i) }
 fun toast(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
