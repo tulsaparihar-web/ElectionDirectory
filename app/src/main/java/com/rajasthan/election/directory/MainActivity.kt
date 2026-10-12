@@ -317,6 +317,7 @@ fun ElectionDirectoryApp() {
     val filtered by vm.filtered.collectAsState()
     var selected by remember { mutableStateOf<Officer?>(null) }
     var showFilters by remember { mutableStateOf(false) }
+    var filterFocus by remember { mutableStateOf<String?>(null) }
     var showAbout by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
 
@@ -344,7 +345,7 @@ fun ElectionDirectoryApp() {
             Column(Modifier.fillMaxSize().padding(padding)) {
                 Header(onAbout = { showAbout = true }, onSettings = { showSettings = true })
                 when (state.tab) {
-                    AppTab.HOME -> HomeScreen(vm, all, onOpenOfficer = { selected = it })
+                    AppTab.HOME -> HomeScreen(vm, all, onOpenOfficer = { selected = it }, onQuickFilter = { filter -> filterFocus = filter; vm.setTab(AppTab.DIRECTORY); showFilters = true })
                     AppTab.DIRECTORY -> StaffScreen(vm, all, filtered, state, onOpen = { selected = it }, onFilter = { showFilters = true })
                     AppTab.OFFICES -> OfficesScreen(all, onOpen = { vm.setTab(AppTab.DIRECTORY); vm.setDistrict(it) }, onContact = { selected = it })
                     AppTab.BIRTHDAYS -> BirthdaysScreen(all, onOpen = { selected = it })
@@ -365,7 +366,7 @@ fun ElectionDirectoryApp() {
             onDismiss = { selected = null }
         )
     }
-    if (showFilters) FilterSheet(vm, all, onDismiss = { showFilters = false })
+    if (showFilters) FilterSheet(vm, all, initialExpandedFilter = filterFocus, onDismiss = { showFilters = false; filterFocus = null })
     if (showAbout) AboutSheet(all.size, onDismiss = { showAbout = false })
     if (showSettings) SettingsSheet(
         darkMode = state.darkMode,
@@ -416,10 +417,11 @@ private fun HomeStatCard(
     value: String,
     label: String,
     modifier: Modifier = Modifier,
-    accent: Color = Navy
+    accent: Color = Navy,
+    onClick: () -> Unit = {}
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier.clickable(onClick = onClick),
         color = SurfaceWhite,
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, Border),
@@ -445,7 +447,7 @@ private fun HomeStatCard(
 }
 
 @Composable
-fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Officer) -> Unit) {
+fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Officer) -> Unit, onQuickFilter: (String?) -> Unit = {}) {
     val today = all.filter { isBirthdayToday(it.dob) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -471,12 +473,12 @@ fun HomeScreen(vm: DirectoryViewModel, all: List<Officer>, onOpenOfficer: (Offic
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HomeStatCard(Icons.Default.People, contactCount.toString(), "Contacts", Modifier.weight(1f), Navy)
-                    HomeStatCard(Icons.Default.LocationCity, (districtCount - 1).coerceAtLeast(0).toString(), "Districts", Modifier.weight(1f), Navy)
+                    HomeStatCard(Icons.Default.People, contactCount.toString(), "Contacts", Modifier.weight(1f), Navy) { onQuickFilter(null) }
+                    HomeStatCard(Icons.Default.LocationCity, (districtCount - 1).coerceAtLeast(0).toString(), "Districts", Modifier.weight(1f), Navy) { onQuickFilter("District") }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HomeStatCard(Icons.Default.Badge, designationCount.toString(), "Designations", Modifier.weight(1f), Navy)
-                    HomeStatCard(Icons.Default.Groups, sectionCount.toString(), "Sections", Modifier.weight(1f), Navy)
+                    HomeStatCard(Icons.Default.Badge, designationCount.toString(), "Designations", Modifier.weight(1f), Navy) { onQuickFilter("Designation") }
+                    HomeStatCard(Icons.Default.Groups, sectionCount.toString(), "Sections", Modifier.weight(1f), Navy) { onQuickFilter("Section / Cell") }
                 }
             }
         }
@@ -1000,7 +1002,7 @@ fun EmptyState(title: String, message: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Unit) {
+fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, initialExpandedFilter: String? = null, onDismiss: () -> Unit) {
     val state by vm.state.collectAsState()
 
     var localDistrict by remember(state.district) { mutableStateOf(state.district) }
@@ -1089,6 +1091,7 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
                 label = "District",
                 selected = localDistrict,
                 values = districtValues,
+                autoExpand = initialExpandedFilter == "District",
                 onSelect = {
                     localDistrict = it
                     localDesignation = "All"
@@ -1102,6 +1105,7 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
                 label = "Designation",
                 selected = localDesignation,
                 values = designationValues,
+                autoExpand = initialExpandedFilter == "Designation",
                 onSelect = {
                     localDesignation = it
                     localSection = "All"
@@ -1114,6 +1118,7 @@ fun FilterSheet(vm: DirectoryViewModel, all: List<Officer>, onDismiss: () -> Uni
                 label = "Section / Cell",
                 selected = localSection,
                 values = sectionValues,
+                autoExpand = initialExpandedFilter == "Section / Cell",
                 onSelect = { localSection = it }
             )
 
@@ -1142,9 +1147,10 @@ fun FilterSelector(
     label: String,
     selected: String,
     values: List<String>,
+    autoExpand: Boolean = false,
     onSelect: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember(label, autoExpand) { mutableStateOf(autoExpand) }
     var search by remember { mutableStateOf("") }
     val displaySelected = when {
         selected != "All" -> selected
