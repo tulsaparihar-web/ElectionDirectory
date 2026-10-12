@@ -288,16 +288,15 @@ fun topTenSeniorContactKeys(list: List<Officer>): Set<String> =
 
 fun sortBySeniorityOrder(list: List<Officer>): List<Officer> = list.sortedWith(
     compareBy<Officer>(
-        // CEO HQ staff (DOB present) always come before ordinary staff.
+        // CEO Office HQ staff appear first in the agreed role hierarchy.
         { if (isCeoHqStaff(it)) 0 else 1 },
-        // Requested CEO HQ hierarchy is applied before alphabetical/designation
-        // ordering, even when the bundled/live record has no usable order value.
         { if (isCeoHqStaff(it)) ceoHqSeniorityRank(it) else 0 },
-        // Preserve explicit seniorityOrder for records that are not covered by
-        // the CEO HQ role hierarchy.
+        // Use a real supplied seniority value whenever one exists.
         { if (it.seniorityOrder == DEFAULT_SENIORITY_ORDER) DEFAULT_SENIORITY_ORDER else it.seniorityOrder },
-        { it.designation.lowercase(Locale.getDefault()) },
-        { it.officerName.lowercase(Locale.getDefault()) }
+        // The bundled directory does not provide seniorityOrder for every contact.
+        // For those records, retain stable master-record order (ID) rather than
+        // silently rearranging staff alphabetically by designation/name.
+        { it.id }
     )
 )
 
