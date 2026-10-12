@@ -203,7 +203,16 @@ fun ElectionLogo(modifier: Modifier = Modifier) {
     Image(bitmap = image, contentDescription = "Election Commission of India", modifier = modifier)
 }
 
-fun isCeoHqStaff(o: Officer): Boolean = o.dob.isNotBlank()
+fun isCeoHqStaff(o: Officer): Boolean {
+    // DOB is personal data and must never be used as a proxy for office assignment.
+    // The master directory identifies CEO Office HQ staff by the headquarters
+    // office record: Jaipur, Election Department, and no subordinate location.
+    val office = o.officeDepartment.trim().uppercase(Locale.ROOT)
+    val district = o.district.trim().uppercase(Locale.ROOT)
+    return office == "ELECTION DEPARTMENT" &&
+        district == "JAIPUR" &&
+        o.subLocation.isBlank()
+}
 
 // CEO HQ seniority order supplied for the directory.
 fun normalizedPersonName(value: String): String =
