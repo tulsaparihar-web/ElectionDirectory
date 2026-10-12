@@ -282,11 +282,15 @@ fun contactRestrictionKey(o: Officer): String =
     ).joinToString("|")
 
 // Restrict calling only for the 10 most senior contacts within CEO Office HQ.
-fun topTenSeniorContactKeys(list: List<Officer>): Set<String> =
+fun topTenSeniorContactIds(list: List<Officer>): Set<Int> =
     sortCeoHqBySeniority(list.filter { isCeoHqStaff(it) })
         .take(10)
-        .map { contactRestrictionKey(it) }
+        .map { it.id }
         .toSet()
+
+// Restrict only the ten selected CEO Office HQ contacts; no other contact is restricted.
+fun isCallRestricted(o: Officer, all: List<Officer>): Boolean =
+    isCeoHqStaff(o) && o.id in topTenSeniorContactIds(all)
 
 fun sortBySeniorityOrder(list: List<Officer>): List<Officer> = list.sortedWith(
     compareBy<Officer>(
@@ -363,7 +367,7 @@ fun ElectionDirectoryApp() {
     selected?.let {
         OfficerDetails(
             it,
-            callRestricted = contactRestrictionKey(it) in topTenSeniorContactKeys(all),
+            callRestricted = isCallRestricted(it, all),
             onDismiss = { selected = null }
         )
     }
@@ -1459,18 +1463,25 @@ fun OfficerDetails(o: Officer, callRestricted: Boolean = false, onDismiss: () ->
                 }
             }
 
-            if (o.mobile() != null) {
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = { whatsapp(context, o.mobile()!!) },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(13.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF128C7E))
-                ) {
-                    Icon(Icons.Default.Chat, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Open WhatsApp", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-                }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = { o.mobile()?.let { whatsapp(context, it) } },
+                enabled = o.mobile() != null,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(13.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF128C7E),
+                    disabledContainerColor = Color(0xFF128C7E).copy(alpha = 0.25f)
+                )
+            ) {
+                Icon(Icons.Default.Chat, null)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (o.mobile() != null) "Open WhatsApp" else "WhatsApp unavailable — no mobile number",
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
