@@ -1657,7 +1657,7 @@ fun rememberDirectoryViewModel(): DirectoryViewModel {
     val vm = remember { DirectoryViewModel(repo) }
     LaunchedEffect(Unit) {
         val prefs = appContext.getSharedPreferences("directory_startup", Context.MODE_PRIVATE)
-        val bundledDataVersion = 3
+        val bundledDataVersion = 4
 
         // App updates must refresh an existing Room database too. Previously the
         // seed ran only when the database was empty, leaving old phone/email data
