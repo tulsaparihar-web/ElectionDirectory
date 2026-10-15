@@ -222,13 +222,10 @@ fun ElectionLogo(modifier: Modifier = Modifier) {
 }
 
 fun isCeoHqStaff(o: Officer): Boolean {
-    // CEO Office HQ staff are part of the Election Department headquarters in Jaipur.
-    // Do not require a blank sub-location: the official JSON can populate an
-    // assembly/location value for headquarters staff, which previously excluded
-    // most of the HQ roster from the Office Directory card and HQ filter.
-    val office = o.officeDepartment.trim().uppercase(Locale.ROOT)
-    val district = o.district.trim().uppercase(Locale.ROOT)
-    return office == "ELECTION DEPARTMENT" && district == "JAIPUR"
+    // The official directory JSON identifies CEO Office staff by a populated DOB.
+    // Keep this rule consistent across the Office Directory count, HQ filter,
+    // and CEO HQ staff badge.
+    return o.dob.isNotBlank()
 }
 
 // CEO HQ seniority order supplied for the directory.
