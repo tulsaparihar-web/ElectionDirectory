@@ -71,9 +71,25 @@ data class Officer(
 ) {
     // Accept current and legacy DB formats for phone numbers.
     fun phones(): List<String> = contactNumbers.split(Regex("[|,;\\n]+")).map { it.trim() }.filter { it.isNotBlank() }
-    fun mobile(): String? = phones().firstOrNull { it.filter(Char::isDigit).length >= 10 }
-    fun callNumber(): String? = mobile() ?: phones().firstOrNull()
-    fun officeNumbers(): List<String> = phones().filter { it != mobile() }
+
+    // A call action must use a genuine mobile number, never an EPABX/extension.
+    // The directory is Indian, so normalize a leading domestic 0 and accept
+    // a 10-digit mobile beginning 6-9 (optionally stored with country code 91).
+    fun mobile(): String? = phones().firstNotNullOfOrNull { raw ->
+        val digits = raw.filter(Char::isDigit)
+        val normalized = when {
+            digits.length == 12 && digits.startsWith("91") -> digits.substring(2)
+            digits.length == 11 && digits.startsWith("0") -> digits.substring(1)
+            digits.length == 10 -> digits
+            else -> ""
+        }
+        normalized.takeIf { it.length == 10 && it.firstOrNull() in '6'..'9' }
+    }
+
+    fun callNumber(): String? = mobile()
+    fun officeNumbers(): List<String> = phones().filter { raw ->
+        raw.filter(Char::isDigit) != mobile()?.filter(Char::isDigit)
+    }
     fun locationLabel(): String = listOf(subLocation, district)
         .filter { it.isNotBlank() }.joinToString(", ")
 }
@@ -272,7 +288,8 @@ fun ceoHqSeniorityRank(o: Officer): Int {
     }
 }
 
-// Stable contact key avoids accidentally restricting multiple staff when source records reuse an ID.
+// Stable contact key avoids relying on database IDs that may be regenerated
+// when the official directory is synchronized.
 fun contactRestrictionKey(o: Officer): String =
     listOf(
         normalizedPersonName(o.officerName),
@@ -281,16 +298,17 @@ fun contactRestrictionKey(o: Officer): String =
         o.employeeId.trim().uppercase(Locale.ROOT)
     ).joinToString("|")
 
-// Restrict calling only for the 10 most senior contacts within CEO Office HQ.
-fun topTenSeniorContactIds(list: List<Officer>): Set<Int> =
+// Restrict calling only for the ten highest-ranked contacts in CEO Office HQ.
+// Rank on the complete HQ list, then compare stable person keys so a sync or
+// regenerated database ID cannot accidentally disable unrelated employees.
+fun topTenSeniorContactKeys(list: List<Officer>): Set<String> =
     sortCeoHqBySeniority(list.filter { isCeoHqStaff(it) })
         .take(10)
-        .map { it.id }
+        .map { contactRestrictionKey(it) }
         .toSet()
 
-// Restrict only the ten selected CEO Office HQ contacts; no other contact is restricted.
 fun isCallRestricted(o: Officer, all: List<Officer>): Boolean =
-    isCeoHqStaff(o) && o.id in topTenSeniorContactIds(all)
+    isCeoHqStaff(o) && contactRestrictionKey(o) in topTenSeniorContactKeys(all)
 
 fun sortBySeniorityOrder(list: List<Officer>): List<Officer> = list.sortedWith(
     compareBy<Officer>(
@@ -1420,8 +1438,22 @@ fun OfficerDetails(o: Officer, callRestricted: Boolean = false, onDismiss: () ->
             Spacer(Modifier.height(10.dp))
             Text("Contact", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
 
-            o.mobile()?.let { ContactLine("Mobile", it, Icons.Default.Phone) { dial(context, it) } }
-            o.officeNumbers().forEach { ContactLine("Office / EPABX", it, Icons.Default.Phone) { dial(context, it) } }
+            o.mobile()?.let { mobile ->
+                ContactLine(
+                    "Mobile",
+                    mobile,
+                    Icons.Default.Phone,
+                    enabled = !callRestricted
+                ) { if (!callRestricted) dial(context, mobile) }
+            }
+            o.officeNumbers().forEach { number ->
+                ContactLine(
+                    "Office / EPABX",
+                    number,
+                    Icons.Default.Phone,
+                    enabled = !callRestricted
+                ) { if (!callRestricted) dial(context, number) }
+            }
 
             if (o.email.isNotBlank()) {
                 Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1488,8 +1520,27 @@ fun OfficerDetails(o: Officer, callRestricted: Boolean = false, onDismiss: () ->
 }
 
 @Composable
-fun ContactLine(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onCall: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, tint = Navy); Spacer(Modifier.width(9.dp)); Column(Modifier.weight(1f)) { Text(label, color = Color.Gray, style = MaterialTheme.typography.labelSmall); Text(value, fontWeight = FontWeight.SemiBold) }; IconButton(onCall) { Icon(Icons.Default.Call, "Call") } }
+fun ContactLine(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    enabled: Boolean = true,
+    onCall: () -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = Navy)
+        Spacer(Modifier.width(9.dp))
+        Column(Modifier.weight(1f)) {
+            Text(label, color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+            Text(value, fontWeight = FontWeight.SemiBold)
+        }
+        IconButton(onClick = onCall, enabled = enabled) {
+            Icon(Icons.Default.Call, if (enabled) "Call" else "Call restricted")
+        }
+    }
 }
 
 @Composable
