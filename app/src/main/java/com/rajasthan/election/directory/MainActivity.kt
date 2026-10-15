@@ -83,7 +83,7 @@ data class Officer(
             digits.length == 10 -> digits
             else -> ""
         }
-        normalized.takeIf { it.length == 10 && it.firstOrNull() in '6'..'9' }
+        normalized.takeIf { it.length == 10 && it[0] in '6'..'9' }
     }
 
     fun callNumber(): String? = mobile()
