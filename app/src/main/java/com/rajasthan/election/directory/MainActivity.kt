@@ -309,11 +309,12 @@ fun sortBySeniorityOrder(list: List<Officer>): List<Officer> =
         )
     )
 
-// Calling restrictions are intentionally disabled: Call and WhatsApp should be
-// available for every contact with a valid mobile number.
-fun topTenSeniorContactKeys(list: List<Officer>): Set<String> = emptySet()
+// Restrict direct contact actions only for the two most senior records.
+fun isCallRestricted(o: Officer, all: List<Officer>): Boolean =
+    o.seniorityOrder == 1 || o.seniorityOrder == 2
 
-fun isCallRestricted(o: Officer, all: List<Officer>): Boolean = false
+fun topTenSeniorContactKeys(list: List<Officer>): Set<String> =
+    list.filter { isCallRestricted(it, list) }.map { contactRestrictionKey(it) }.toSet()
 
 fun sortCeoHqBySeniority(list: List<Officer>): List<Officer> = sortBySeniorityOrder(list)
 
@@ -820,7 +821,11 @@ fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, callRestricted: Bo
                         Icons.Default.Call,
                         enabled = !callRestricted
                     ) { if (!callRestricted) o.callNumber()?.let { dial(context, it) } }
-                    if (o.mobile() != null) SmallAction("WhatsApp", Icons.Default.Chat) { o.mobile()?.let { whatsapp(context, it) } }
+                    if (o.mobile() != null) SmallAction(
+                        if (callRestricted) "WhatsApp restricted" else "WhatsApp",
+                        Icons.Default.Chat,
+                        enabled = !callRestricted
+                    ) { if (!callRestricted) o.mobile()?.let { whatsapp(context, it) } }
                 }
                 if (o.email.isNotBlank()) SmallAction("Email", Icons.Default.Email) { email(context, o.email) }
                 SmallAction("Details", Icons.Default.Visibility) { onOpen(o) }
@@ -1508,7 +1513,7 @@ fun OfficerDetails(o: Officer, callRestricted: Boolean = false, onDismiss: () ->
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = { o.mobile()?.let { whatsapp(context, it) } },
-                enabled = o.mobile() != null,
+                enabled = o.mobile() != null && !callRestricted,
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(13.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -1519,7 +1524,11 @@ fun OfficerDetails(o: Officer, callRestricted: Boolean = false, onDismiss: () ->
                 Icon(Icons.Default.Chat, null)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    if (o.mobile() != null) "Open WhatsApp" else "WhatsApp unavailable — no mobile number",
+                    when {
+                        o.mobile() == null -> "WhatsApp unavailable — no mobile number"
+                        callRestricted -> "WhatsApp restricted for senior officers"
+                        else -> "Open WhatsApp"
+                    },
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis
