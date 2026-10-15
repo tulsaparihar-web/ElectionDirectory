@@ -761,7 +761,6 @@ fun FilterButton(label: String, value: String, modifier: Modifier = Modifier, on
 
 @Composable
 fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, callRestricted: Boolean = false) {
-    val context = LocalContext.current
     Card(Modifier.fillMaxWidth().clickable { onOpen(o) }, shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = SurfaceWhite), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -809,23 +808,7 @@ fun CompactOfficerCard(o: Officer, onOpen: (Officer) -> Unit, callRestricted: Bo
                     Text(o.sectionCell, color = TextMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (o.callNumber() != null) {
-                    SmallAction(
-                        if (callRestricted) "Call restricted" else "Call",
-                        Icons.Default.Call,
-                        enabled = !callRestricted
-                    ) { if (!callRestricted) o.callNumber()?.let { dial(context, it) } }
-                    if (o.mobile() != null) SmallAction(
-                        if (callRestricted) "WhatsApp restricted" else "WhatsApp",
-                        Icons.Default.Chat,
-                        enabled = !callRestricted
-                    ) { if (!callRestricted) o.mobile()?.let { whatsapp(context, it) } }
-                }
-                if (o.email.isNotBlank()) SmallAction("Email", Icons.Default.Email) { email(context, o.email) }
-                SmallAction("Details", Icons.Default.Visibility) { onOpen(o) }
-            }
+            // Keep the directory list uncluttered; tap the card to open contact details.
         }
     }
 }
@@ -1449,13 +1432,15 @@ fun OfficerDetails(o: Officer, callRestricted: Boolean = false, onDismiss: () ->
             Spacer(Modifier.height(10.dp))
             Text("Contact", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
 
-            o.mobile()?.let { mobile ->
-                ContactLine(
-                    "Mobile",
-                    mobile,
-                    Icons.Default.Phone,
-                    enabled = !callRestricted
-                ) { if (!callRestricted) dial(context, mobile) }
+            // Do not reveal the mobile number for the two restricted senior records.
+            if (!callRestricted) {
+                o.mobile()?.let { mobile ->
+                    ContactLine(
+                        "Mobile",
+                        mobile,
+                        Icons.Default.Phone
+                    ) { dial(context, mobile) }
+                }
             }
             o.officeNumbers().forEach { number ->
                 ContactLine(
