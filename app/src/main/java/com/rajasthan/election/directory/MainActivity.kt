@@ -1666,6 +1666,7 @@ fun rememberDirectoryViewModel(): DirectoryViewModel {
 
 suspend fun seedDatabase(context: Context, repo: OfficerRepository) {
     val arr = JSONArray(context.assets.open("directory.json").bufferedReader().readText())
+    val existingFavorites = repo.officers.first().associate { it.id to it.isFavorite }
     val seed = buildList {
         for (i in 0 until arr.length()) {
             val x = arr.getJSONObject(i); val nums = x.getJSONArray("contactNumbers")
@@ -1683,6 +1684,7 @@ suspend fun seedDatabase(context: Context, repo: OfficerRepository) {
                     contactNumbers = buildList { for (j in 0 until nums.length()) add(nums.getString(j)) }.joinToString("|"),
                     email = x.optString("email"),
                     remark = x.optString("remark"),
+                    isFavorite = existingFavorites[x.getInt("id")] ?: false,
                     seniorityOrder = readSeniorityOrder(x)
                 )
             )
