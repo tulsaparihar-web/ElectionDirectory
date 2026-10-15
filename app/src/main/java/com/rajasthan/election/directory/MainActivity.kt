@@ -169,7 +169,7 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("All"))
 
     val filtered: StateFlow<List<Officer>> = combine(officers, state) { all, s ->
-        all.filter { o ->
+        sortBySeniorityOrder(all.filter { o ->
             val q = s.query.trim().lowercase(Locale.getDefault())
             val searchable = listOf(o.officerName, o.designation, o.officeDepartment, o.district,
                 o.subLocation, o.sectionCell, o.employeeId, o.dob, o.email, o.contactNumbers, o.remark)
@@ -182,7 +182,7 @@ class DirectoryViewModel(private val repo: OfficerRepository) : ViewModel() {
             val matchesDesignation = s.designation == "All" || o.designation.equals(s.designation, true)
             val matchesSection = s.sectionCell == "All" || o.sectionCell.equals(s.sectionCell, true)
             matchesQuery && matchesDistrict && matchesDesignation && matchesSection
-        }
+        })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
 
@@ -303,6 +303,10 @@ fun contactRestrictionKey(o: Officer): String =
 // regenerated database ID cannot accidentally disable unrelated employees.
 fun topTenSeniorContactKeys(list: List<Officer>): Set<String> =
     sortCeoHqBySeniority(list.filter { isCeoHqStaff(it) })
+        // Do not classify ordinary staff as senior merely because they have a
+        // low database ID when seniorityOrder is absent. Only explicitly ranked
+        // records or the known senior-management roles qualify for restriction.
+        .filter { it.seniorityOrder != DEFAULT_SENIORITY_ORDER || ceoHqSeniorityRank(it) < 8 }
         .take(10)
         .map { contactRestrictionKey(it) }
         .toSet()
