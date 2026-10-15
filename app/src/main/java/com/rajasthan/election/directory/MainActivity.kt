@@ -301,36 +301,19 @@ fun contactRestrictionKey(o: Officer): String =
 // Restrict calling only for the ten highest-ranked contacts in CEO Office HQ.
 // Rank on the complete HQ list, then compare stable person keys so a sync or
 // regenerated database ID cannot accidentally disable unrelated employees.
-fun sortBySeniorityOrder(list: List<Officer>): List<Officer> {
-    // If the source provides seniorityOrder, use it as the primary order within
-    // the directory. If it does not, use the explicit CEO-HQ role fallback and
-    // then stable master-record IDs. Never let alphabetical DAO order win.
-    val hasSuppliedSeniority = list.any { it.seniorityOrder != DEFAULT_SENIORITY_ORDER }
-    return list.sortedWith(
+fun sortBySeniorityOrder(list: List<Officer>): List<Officer> =
+    list.sortedWith(
         compareBy<Officer>(
-            { if (isCeoHqStaff(it)) 0 else 1 },
-            {
-                if (hasSuppliedSeniority) {
-                    if (it.seniorityOrder == DEFAULT_SENIORITY_ORDER) Int.MAX_VALUE else it.seniorityOrder
-                } else if (isCeoHqStaff(it)) {
-                    ceoHqSeniorityRank(it)
-                } else {
-                    0
-                }
-            },
-            { it.id }
+            { if (it.seniorityOrder == DEFAULT_SENIORITY_ORDER) Int.MAX_VALUE else it.seniorityOrder },
+            { it.officerName.trim().lowercase(Locale.ROOT) }
         )
     )
-}
 
-fun topTenSeniorContactKeys(list: List<Officer>): Set<String> =
-    sortCeoHqBySeniority(list.filter { isCeoHqStaff(it) })
-        .take(10)
-        .map { contactRestrictionKey(it) }
-        .toSet()
+// Calling restrictions are intentionally disabled: Call and WhatsApp should be
+// available for every contact with a valid mobile number.
+fun topTenSeniorContactKeys(list: List<Officer>): Set<String> = emptySet()
 
-fun isCallRestricted(o: Officer, all: List<Officer>): Boolean =
-    isCeoHqStaff(o) && contactRestrictionKey(o) in topTenSeniorContactKeys(all)
+fun isCallRestricted(o: Officer, all: List<Officer>): Boolean = false
 
 fun sortCeoHqBySeniority(list: List<Officer>): List<Officer> = sortBySeniorityOrder(list)
 
