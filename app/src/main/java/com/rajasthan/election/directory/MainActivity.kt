@@ -301,32 +301,36 @@ fun contactRestrictionKey(o: Officer): String =
 // Restrict calling only for the ten highest-ranked contacts in CEO Office HQ.
 // Rank on the complete HQ list, then compare stable person keys so a sync or
 // regenerated database ID cannot accidentally disable unrelated employees.
+fun sortBySeniorityOrder(list: List<Officer>): List<Officer> {
+    // If the source provides seniorityOrder, use it as the primary order within
+    // the directory. If it does not, use the explicit CEO-HQ role fallback and
+    // then stable master-record IDs. Never let alphabetical DAO order win.
+    val hasSuppliedSeniority = list.any { it.seniorityOrder != DEFAULT_SENIORITY_ORDER }
+    return list.sortedWith(
+        compareBy<Officer>(
+            { if (isCeoHqStaff(it)) 0 else 1 },
+            {
+                if (hasSuppliedSeniority) {
+                    if (it.seniorityOrder == DEFAULT_SENIORITY_ORDER) Int.MAX_VALUE else it.seniorityOrder
+                } else if (isCeoHqStaff(it)) {
+                    ceoHqSeniorityRank(it)
+                } else {
+                    0
+                }
+            },
+            { it.id }
+        )
+    )
+}
+
 fun topTenSeniorContactKeys(list: List<Officer>): Set<String> =
     sortCeoHqBySeniority(list.filter { isCeoHqStaff(it) })
-        // Do not classify ordinary staff as senior merely because they have a
-        // low database ID when seniorityOrder is absent. Only explicitly ranked
-        // records or the known senior-management roles qualify for restriction.
-        .filter { it.seniorityOrder != DEFAULT_SENIORITY_ORDER || ceoHqSeniorityRank(it) < 8 }
         .take(10)
         .map { contactRestrictionKey(it) }
         .toSet()
 
 fun isCallRestricted(o: Officer, all: List<Officer>): Boolean =
     isCeoHqStaff(o) && contactRestrictionKey(o) in topTenSeniorContactKeys(all)
-
-fun sortBySeniorityOrder(list: List<Officer>): List<Officer> = list.sortedWith(
-    compareBy<Officer>(
-        // CEO Office HQ staff appear first in the agreed role hierarchy.
-        { if (isCeoHqStaff(it)) 0 else 1 },
-        { if (isCeoHqStaff(it)) ceoHqSeniorityRank(it) else 0 },
-        // Use a real supplied seniority value whenever one exists.
-        { if (it.seniorityOrder == DEFAULT_SENIORITY_ORDER) DEFAULT_SENIORITY_ORDER else it.seniorityOrder },
-        // The bundled directory does not provide seniorityOrder for every contact.
-        // For those records, retain stable master-record order (ID) rather than
-        // silently rearranging staff alphabetically by designation/name.
-        { it.id }
-    )
-)
 
 fun sortCeoHqBySeniority(list: List<Officer>): List<Officer> = sortBySeniorityOrder(list)
 
@@ -1633,18 +1637,27 @@ fun rememberDirectoryViewModel(): DirectoryViewModel {
     val repo = remember { OfficerRepository(db.officerDao()) }
     val vm = remember { DirectoryViewModel(repo) }
     LaunchedEffect(Unit) {
-        if (repo.officers.first().isEmpty()) seedDatabase(appContext, repo)
-
-        // Attempt official-directory sync once on the first app launch after installation.
-        // Persist the attempt even if offline; users can retry later from Settings.
         val prefs = appContext.getSharedPreferences("directory_startup", Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("first_launch_auto_sync_attempted", false)) {
+        val bundledDataVersion = 3
+
+        // App updates must refresh an existing Room database too. Previously the
+        // seed ran only when the database was empty, leaving old phone/email data
+        // active even after a newer APK was installed.
+        if (repo.officers.first().isEmpty() || prefs.getInt("bundled_data_version", 0) < bundledDataVersion) {
+            seedDatabase(appContext, repo)
+            prefs.edit().putInt("bundled_data_version", bundledDataVersion).apply()
+        }
+
+        // Retry official sync once for this data version. If offline, the refreshed
+        // bundled data remains usable and the user can retry from Settings.
+        val syncVersion = prefs.getInt("directory_sync_version", 0)
+        if (syncVersion < bundledDataVersion) {
             try {
                 vm.syncFromOfficialDirectory()
             } catch (_: Exception) {
-                // Keep the bundled/offline directory available if the network is unavailable.
+                // Keep bundled data if the official endpoint is unavailable.
             } finally {
-                prefs.edit().putBoolean("first_launch_auto_sync_attempted", true).apply()
+                prefs.edit().putInt("directory_sync_version", bundledDataVersion).apply()
             }
         }
     }
