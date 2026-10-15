@@ -1366,9 +1366,25 @@ fun parseOfficialDirectoryJson(text: String): List<Officer> {
                     district = parts.last()
                 }
             }
-            val contacts = o.optJSONArray("contactNumbers")?.let { a ->
-                (0 until a.length()).map { a.optString(it) }.filter(String::isNotBlank).joinToString("|")
-            } ?: normalizeContacts(o.optString("contactNumbers", o.optString("contactNo")))
+            // The official endpoint has used different phone field names/formats.
+            // Read arrays, delimited strings, and common mobile/phone aliases so a
+            // valid number is not silently lost during Sync.
+            val contacts = listOf(
+                "contactNumbers", "contactNo", "mobileNumber", "mobile", "mobileNo",
+                "phoneNumber", "phone", "telephone", "contact"
+            ).firstNotNullOfOrNull { key ->
+                val value = o.opt(key) ?: return@firstNotNullOfOrNull null
+                when (value) {
+                    is JSONArray -> (0 until value.length())
+                        .map { value.optString(it).trim() }
+                        .filter(String::isNotBlank)
+                        .joinToString("|")
+                        .takeIf(String::isNotBlank)
+                    is String -> normalizeContacts(value).takeIf(String::isNotBlank)
+                    is Number -> value.toString()
+                    else -> null
+                }
+            } ?: ""
             add(
                 Officer(
                     id = o.optInt("id", i + 1),
@@ -1669,7 +1685,11 @@ suspend fun seedDatabase(context: Context, repo: OfficerRepository) {
     val existingFavorites = repo.officers.first().associate { it.id to it.isFavorite }
     val seed = buildList {
         for (i in 0 until arr.length()) {
-            val x = arr.getJSONObject(i); val nums = x.getJSONArray("contactNumbers")
+            val x = arr.getJSONObject(i)
+            val bundledContacts = x.optJSONArray("contactNumbers")?.let { nums ->
+                (0 until nums.length()).map { nums.optString(it).trim() }
+                    .filter(String::isNotBlank).joinToString("|")
+            } ?: normalizeContacts(x.optString("contactNumbers", x.optString("contactNo")))
             add(
                 Officer(
                     id = x.getInt("id"),
@@ -1681,7 +1701,7 @@ suspend fun seedDatabase(context: Context, repo: OfficerRepository) {
                     sectionCell = x.optString("sectionCell"),
                     employeeId = x.optString("employeeId"),
                     dob = x.optString("dob"),
-                    contactNumbers = buildList { for (j in 0 until nums.length()) add(nums.getString(j)) }.joinToString("|"),
+                    contactNumbers = bundledContacts,
                     email = x.optString("email"),
                     remark = x.optString("remark"),
                     isFavorite = existingFavorites[x.getInt("id")] ?: false,
