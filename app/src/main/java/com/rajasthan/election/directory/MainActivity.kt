@@ -1354,11 +1354,14 @@ fun parseOfficialDirectoryJson(text: String): List<Officer> {
     return buildList {
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
-            val name = o.optString("officerName", o.optString("name")).trim()
+            // Official JSON schema: srNo, employeeId, name, designation, mobile,
+            // email, district, assemblyConstituency, section, dob, seniorityOrder.
+            // Legacy aliases remain supported for cached data.
+            val name = o.optString("name", o.optString("officerName")).trim()
             if (name.isBlank()) continue
             val rawDistrict = o.optString("district").trim()
             var district = rawDistrict
-            var sub = o.optString("subLocation").trim()
+            var sub = o.optString("assemblyConstituency", o.optString("subLocation")).trim()
             if (district.contains(",") && sub.isBlank()) {
                 val parts = district.split(",").map { it.trim() }.filter { it.isNotBlank() }
                 if (parts.size >= 2) {
@@ -1370,7 +1373,7 @@ fun parseOfficialDirectoryJson(text: String): List<Officer> {
             // Read arrays, delimited strings, and common mobile/phone aliases so a
             // valid number is not silently lost during Sync.
             val contacts = listOf(
-                "contactNumbers", "contactNo", "mobileNumber", "mobile", "mobileNo",
+                "mobile", "contactNumbers", "contactNo", "mobileNumber", "mobileNo",
                 "phoneNumber", "phone", "telephone", "contact"
             ).firstNotNullOfOrNull { key ->
                 val value = o.opt(key) ?: return@firstNotNullOfOrNull null
@@ -1387,13 +1390,13 @@ fun parseOfficialDirectoryJson(text: String): List<Officer> {
             } ?: ""
             add(
                 Officer(
-                    id = o.optInt("id", i + 1),
+                    id = o.optInt("srNo", o.optInt("id", i + 1)),
                     officerName = name,
                     designation = o.optString("designation"),
                     officeDepartment = o.optString("officeDepartment", "ELECTION DEPARTMENT").ifBlank { "ELECTION DEPARTMENT" },
                     district = district,
                     subLocation = sub,
-                    sectionCell = o.optString("sectionCell", o.optString("section")),
+                    sectionCell = o.optString("section", o.optString("sectionCell")),
                     employeeId = o.optString("employeeId", o.optString("employeeID")),
                     dob = o.optString("dob"),
                     contactNumbers = contacts,
@@ -1686,25 +1689,33 @@ suspend fun seedDatabase(context: Context, repo: OfficerRepository) {
     val seed = buildList {
         for (i in 0 until arr.length()) {
             val x = arr.getJSONObject(i)
-            val bundledContacts = x.optJSONArray("contactNumbers")?.let { nums ->
-                (0 until nums.length()).map { nums.optString(it).trim() }
-                    .filter(String::isNotBlank).joinToString("|")
-            } ?: normalizeContacts(x.optString("contactNumbers", x.optString("contactNo")))
+            val bundledContacts = x.opt("mobile")?.let { value ->
+                when (value) {
+                    is JSONArray -> (0 until value.length()).map { value.optString(it).trim() }
+                        .filter(String::isNotBlank).joinToString("|")
+                    is String, is Number -> value.toString()
+                    else -> ""
+                }
+            }?.takeIf { it.isNotBlank() }
+                ?: x.optJSONArray("contactNumbers")?.let { nums ->
+                    (0 until nums.length()).map { nums.optString(it).trim() }
+                        .filter(String::isNotBlank).joinToString("|")
+                } ?: normalizeContacts(x.optString("contactNumbers", x.optString("contactNo")))
             add(
                 Officer(
-                    id = x.getInt("id"),
-                    officerName = x.getString("officerName"),
-                    designation = x.getString("designation"),
-                    officeDepartment = x.getString("officeDepartment"),
-                    district = x.getString("district"),
-                    subLocation = x.optString("subLocation"),
-                    sectionCell = x.optString("sectionCell"),
+                    id = x.optInt("srNo", x.optInt("id", i + 1)),
+                    officerName = x.optString("name", x.optString("officerName")),
+                    designation = x.optString("designation"),
+                    officeDepartment = x.optString("officeDepartment", "ELECTION DEPARTMENT").ifBlank { "ELECTION DEPARTMENT" },
+                    district = x.optString("district"),
+                    subLocation = x.optString("assemblyConstituency", x.optString("subLocation")),
+                    sectionCell = x.optString("section", x.optString("sectionCell")),
                     employeeId = x.optString("employeeId"),
                     dob = x.optString("dob"),
                     contactNumbers = bundledContacts,
                     email = x.optString("email"),
                     remark = x.optString("remark"),
-                    isFavorite = existingFavorites[x.getInt("id")] ?: false,
+                    isFavorite = existingFavorites[x.optInt("srNo", x.optInt("id", i + 1))] ?: false,
                     seniorityOrder = readSeniorityOrder(x)
                 )
             )
